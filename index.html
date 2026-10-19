@@ -510,6 +510,7 @@ a.btn { text-decoration: none; }
 .pkbanb { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 7px; padding: 3px 9px; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .pkbanb:hover { color: var(--urgent); border-color: color-mix(in srgb, var(--urgent) 45%, var(--line)); background: var(--urgent-bg); }
 .pkbanb[disabled] { opacity: .35; cursor: not-allowed; }
+table.pknoshop th:nth-child(6), table.pknoshop th:nth-child(7), table.pknoshop td.pksh, table.pknoshop td.pkshn { display: none; }
 .pksh { font-weight: 600; color: var(--accent); white-space: nowrap; }
 .pkshops { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 10px; }
 .pkshop { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--surface); min-width: 0; color: var(--muted); }
@@ -4414,7 +4415,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         lastTot = [all.length, fresh.length]; render(all.length, fresh.length);
       }
       function render(total, fresh) {
-        const asg = assignMap();
+        const asg = assignMap(); { const t = $('pickBody').closest('table'); if (t) t.classList.toggle('pknoshop', !pickShops().length); }
         $('pickBody').innerHTML = pick.map((a, i) => '<tr class="' + (a.on ? '' : 'pkoff') + '"><td class="pkchk"><input type="checkbox" data-pk="' + i + '"' + (a.on ? ' checked' : '') + ' aria-label="Chọn mã ' + esc(a.code) + '"></td><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(a.code) + '</td><td>' + esc(a.name) +  + '</td><td>' + (a.nganh ? '<span class="pkng">' + esc(a.nganh) + '</span>' : '') + '</td><td class="mono pksh">' + (a.on && asg.has(a.code) ? esc(shopNo(asg.get(a.code))) : '') + '</td><td class="pkshn">' + (a.on && asg.has(a.code) ? esc(shopLabel(asg.get(a.code)).replace(/^LC\s+/, '')) : '') + '</td><td class="pkbanc"><button type="button" class="pkbanb" data-ban="' + i + '" title="Loại hẳn mã này: không bao giờ gợi ý lại (kể cả tháng sau, xoá lịch sử tháng). Khôi phục ở mục Mã đã loại hẳn."' + (locked ? ' disabled' : '') + '>⊘ Loại hẳn</button></td></tr>').join('');
         const m = used.month.split('-'), nUsed = Object.keys(used.codes).length, nSkip = Object.keys(used.skip || {}).length;
         $('pickPills').innerHTML = state.rows ? '<span class="pill b">Tháng ' + m[1] + '/' + m[0] + ': đã khảo sát ' + nUsed + ' mã (' + (used.rounds || 0) + ' lần)</span>' + (nSkip ? '<span class="pill w">Đã loại ' + nSkip + ' mã bỏ tick (tháng này)</span>' : '') + (Object.keys(loadBan()).length ? '<span class="pill u">Đã loại hẳn ' + Object.keys(loadBan()).length + ' mã</span>' : '') + '<span class="pill">Còn ' + (fresh || 0).toLocaleString('vi-VN') + ' / ' + (total || 0).toLocaleString('vi-VN') + ' mã chưa khảo sát</span>' : '';
@@ -4428,19 +4429,19 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const curShops = () => { const L = pickShops(); return L.length ? L : (state.shops || []).slice(); };
       /** Chia đều các mã đang tick cho các shop được giao: xếp theo ngành rồi chia vòng, mỗi shop có đủ các ngành và số mã chênh nhau tối đa 1 */
       function assignMap() {
-        const sh = curShops(), m = new Map(); if (!sh.length) return m;
+        const sh = pickShops(), m = new Map(); if (!sh.length) return m; // chưa tick shop nào: không chia shop
         const L = chosen().slice().sort((p, q) => (PK_NG.indexOf(p.nganh) < 0 ? 99 : PK_NG.indexOf(p.nganh)) - (PK_NG.indexOf(q.nganh) < 0 ? 99 : PK_NG.indexOf(q.nganh)));
         L.forEach((a, i) => m.set(a.code, sh[i % sh.length]));
         return m;
       }
-      const shopCounts = () => { const m = assignMap(), c = new Map(); curShops().forEach((s) => c.set(s, 0)); m.forEach((s) => c.set(s, (c.get(s) || 0) + 1)); return c; };
+      const shopCounts = () => { const m = assignMap(), c = new Map(); pickShops().forEach((s) => c.set(s, 0)); m.forEach((s) => c.set(s, (c.get(s) || 0) + 1)); return c; };
       function renderShops() {
         const all = state.shops || [], box = $('pickShopBox'); if (!box) return;
         box.hidden = !all.length; if (!all.length) return;
         const on = new Set(pickShops());
         $('pickShops').innerHTML = all.map((s, i) => '<label class="pkshop' + (on.has(s) ? ' on' : '') + '"><input type="checkbox" data-sh="' + i + '"' + (on.has(s) ? ' checked' : '') + '><span class="mono">' + esc(shopNo(s)) + '</span> ' + esc(shopLabel(s).replace(/^LC\s+/, '')) + '</label>').join('');
-        const n = chosen().length, per = curShops().length ? Math.floor(n / curShops().length) : 0, ex = curShops().length ? n % curShops().length : 0;
-        $('pickShopSum').textContent = (on.size ? '· giao cho ' + on.size + '/' + all.length + ' shop' : '· chưa tick shop nào (giao cho tất cả ' + all.length + ' shop)') + (n ? ' · ' + n + ' mã chia đều: mỗi shop ' + (ex ? per + '–' + (per + 1) : per) + ' mã' : '');
+        const ns = pickShops().length, n = ns ? chosen().length : 0, per = ns ? Math.floor(n / ns) : 0, ex = ns ? n % ns : 0;
+        $('pickShopSum').textContent = (on.size ? '· giao cho ' + on.size + '/' + all.length + ' shop' : '· chưa tick shop nào – danh sách không chia shop') + (n ? ' · ' + n + ' mã chia đều: mỗi shop ' + (ex ? per + '–' + (per + 1) : per) + ' mã' : '');
       }
       // chọn shop chỉ là giao việc khảo sát, không đổi danh sách mã (mã bán chạy luôn tính trên tất cả shop)
       function setShops(list, onFlag) {
@@ -4480,7 +4481,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const sel = chosen(), H = loadHist(), mk = monthKey(), mon = H.filter((r) => r.month === mk), monCodes = new Map();
         mon.forEach((r) => r.codes.forEach((c) => monCodes.set(c.code, c)));
         $('pickRef').innerHTML = !state.rows ? '' : '<div class="pkrow"><span class="pkrl">Đang chọn <b>' + sel.length + '</b> mã</span>' + (sel.length ? ngChips(sel) : '<span class="note">chưa tick mã nào</span>') + '</div>' +
-          (sel.length ? '<div class="pkrow"><span class="pkrl">Chia đều cho <b>' + curShops().length + '</b> shop</span>' + [...shopCounts()].map(([sh, n]) => '<span class="chip">' + esc(shopNo(sh)) + ' <b>' + n + ' mã</b></span>').join('') + '</div>' : '') +
+          (sel.length && pickShops().length ? '<div class="pkrow"><span class="pkrl">Chia đều cho <b>' + pickShops().length + '</b> shop</span>' + [...shopCounts()].map(([sh, n]) => '<span class="chip">' + esc(shopNo(sh)) + ' <b>' + n + ' mã</b></span>').join('') + '</div>' : '') +
           '<div class="pkrow"><span class="pkrl">Tháng này đã khảo sát <b>' + monCodes.size + '</b> mã / ' + mon.length + ' lần</span>' + (monCodes.size ? ngChips([...monCodes.values()]) : '<span class="note">chưa có</span>') + '</div>';
         renderHist();
       }
@@ -4588,13 +4589,13 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (typeof ExcelJS === 'undefined') { msg.textContent = 'Chưa tải được thư viện Excel.'; return; }
         const d = new Date(), p = (x) => String(x).padStart(2, '0'), fn = 'Ma_khao_sat_gia_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.xlsx';
         const am0 = assignMap(), rows = pk.map((a, i) => ({ nganh: a.nganh || '', stt: i + 1, code: a.code, name: a.name, unit: a.unit, sold: Math.round(a.sold * 100) / 100, shops: a.shops.size, ton: Math.round(a.ton * 100) / 100, sh: am0.has(a.code) ? shopNo(am0.get(a.code)) + ' - ' + shopLabel(am0.get(a.code)) : '' }));
-        const shs = curShops(), am = assignMap(), sc = shopCounts();
-        const form = shs.flatMap((sh) => pk.filter((a) => am.get(a.code) === sh).map((a) => ({ shop: shopNo(sh) + ' - ' + shopLabel(sh), prod: a.code + ' - ' + a.name, unit: a.unit, gs: '', dt: '', gdt: '', gv: '', gio: '', note: '' })));
+        const shs = pickShops(), am = assignMap(), sc = shopCounts();
+        const form = !shs.length ? pk.map((a) => ({ shop: '', prod: a.code + ' - ' + a.name, unit: a.unit, gs: '', dt: '', gdt: '', gv: '', gio: '', note: '' })) : shs.flatMap((sh) => pk.filter((a) => am.get(a.code) === sh).map((a) => ({ shop: shopNo(sh) + ' - ' + shopLabel(sh), prod: a.code + ' - ' + a.name, unit: a.unit, gs: '', dt: '', gdt: '', gv: '', gio: '', note: '' })));
         const shopRows = shs.map((sh, i) => ({ stt: i + 1, code: shopNo(sh), name: shopLabel(sh), n: sc.get(sh) || 0 }));
         const wb = makeBook([
-          ['Danh sách mã khảo sát', [['STT', 'stt', 6], ['Mã sản phẩm', 'code', 14], ['Tên sản phẩm', 'name', 60], ['Ngành hàng', 'nganh', 22], ['Shop khảo sát', 'sh', 40]], rows],
-          ['Khảo sát giá (shop điền)', [['SHOP', 'shop', 34], ['Tên thuốc', 'prod', 50], ['ĐVT', 'unit', 8], ['Đối thủ', 'dt', 22], ['Giá Long Châu', 'gs', 13], ['Giá đối thủ', 'gdt', 12], ['Giá vốn', 'gv', 12], ['Giờ nộp', 'gio', 10], ['Ghi chú', 'note', 24]], form],
-          ['Shop khảo sát', [['STT', 'stt', 6], ['Mã shop', 'code', 10], ['Tên shop', 'name', 44], ['Số mã cần khảo sát', 'n', 16]], shopRows]]);
+          ['Danh sách mã khảo sát', [['STT', 'stt', 6], ['Mã sản phẩm', 'code', 14], ['Tên sản phẩm', 'name', 60], ['Ngành hàng', 'nganh', 22]].concat(shs.length ? [['Shop khảo sát', 'sh', 40]] : []), rows],
+          ['Khảo sát giá (shop điền)', [['SHOP', 'shop', 34], ['Tên thuốc', 'prod', 50], ['ĐVT', 'unit', 8], ['Đối thủ', 'dt', 22], ['Giá Long Châu', 'gs', 13], ['Giá đối thủ', 'gdt', 12], ['Giá vốn', 'gv', 12], ['Giờ nộp', 'gio', 10], ['Ghi chú', 'note', 24]], form]]
+          .concat(shs.length ? [['Shop khảo sát', [['STT', 'stt', 6], ['Mã shop', 'code', 10], ['Tên shop', 'name', 44], ['Số mã cần khảo sát', 'n', 16]], shopRows]] : []));
         try { await saveFile(fn, new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); markUsed.src = 'Tải Excel'; markUsed(); msg.textContent = 'Đã tạo ' + fn + '. ' + msg.textContent; }
         catch (e) { msg.textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không xuất được: ' + (e.message || e.code); }
       });
@@ -4603,9 +4604,9 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const d = new Date(), p = (x) => String(x).padStart(2, '0');
         try {
           await tableImage({ title: 'DANH SÁCH MÃ KHẢO SÁT GIÁ ĐỐI THỦ', file: 'Ma_khao_sat_gia_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.png', width: 1180,
-            sub: 'Ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · ' + pk.length + ' mã ' + ($('pickOrd').value === 'asc' ? 'bán thấp' : 'bán chạy') + ' · Chia đều cho ' + curShops().length + ' shop: ' + [...shopCounts()].map(([s, n]) => shopNo(s) + ' (' + n + ' mã)').join(', '),
-            cols: [{ h: 'STT', w: 64, a: 'center' }, { h: 'Mã sản phẩm', w: 150, a: 'center' }, { h: 'Tên sản phẩm', w: 0, a: 'left' }, { h: 'Ngành hàng', w: 170, a: 'left' }, { h: 'Shop khảo sát', w: 300, a: 'left' }],
-            rows: (() => { const am = assignMap(); return pk.map((a, i) => ({ vals: [i + 1, a.code, a.name, a.nganh || '', am.has(a.code) ? shopNo(am.get(a.code)) + ' ' + shopLabel(am.get(a.code)).replace(/^LC\s+/, '') : ''] })); })(), onSaved: () => { markUsed.src = 'Xuất ảnh'; markUsed(); } }, msg);
+            sub: 'Ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · ' + pk.length + ' mã ' + ($('pickOrd').value === 'asc' ? 'bán thấp' : 'bán chạy') + (pickShops().length ? ' · Chia đều cho ' + pickShops().length + ' shop: ' + [...shopCounts()].map(([s, n]) => shopNo(s) + ' (' + n + ' mã)').join(', ') : ''),
+            cols: [{ h: 'STT', w: 64, a: 'center' }, { h: 'Mã sản phẩm', w: 150, a: 'center' }, { h: 'Tên sản phẩm', w: 0, a: 'left' }, { h: 'Ngành hàng', w: 170, a: 'left' }].concat(pickShops().length ? [{ h: 'Shop khảo sát', w: 300, a: 'left' }] : []),
+            rows: (() => { const am = assignMap(), withSh = pickShops().length > 0; return pk.map((a, i) => ({ vals: [i + 1, a.code, a.name, a.nganh || ''].concat(withSh ? [am.has(a.code) ? shopNo(am.get(a.code)) + ' ' + shopLabel(am.get(a.code)).replace(/^LC\s+/, '') : ''] : []) })); })(), onSaved: () => { markUsed.src = 'Xuất ảnh'; markUsed(); } }, msg);
         } catch (e) { msg.textContent = 'Không tạo được ảnh: ' + (e.message || e); }
       });
       /* Google Form: cài web app Apps Script 1 lần (lưu link trên trình duyệt), sau đó mỗi lần chỉ bấm 1 nút → chọn tài khoản Google → có link Form, Sheet, Doc */
