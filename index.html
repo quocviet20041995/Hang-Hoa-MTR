@@ -2880,6 +2880,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       if (!v.code && v.name) { const hit = nameBy.get(shop + '\u0000' + nameOf(v.name)); if (hit) { col('code', codeOf(hit.prod), 'Tìm mã theo tên trong tồn kho'); st = hit; } }
       if (st) { if (!v.name) col('name', prodName(st.prod), 'Thiếu tên sản phẩm'); if (!v.unit) col('unit', capUnit(st.unit), 'Thiếu đơn vị tính'); }
       if (v.unit && v.unit !== capUnit(v.unit)) col('unit', capUnit(v.unit), 'Chuẩn hoá chữ hoa');
+      // có mã / tên sản phẩm nhưng chưa điền số lượng (hoặc số lượng ≤ 0) -> tự điền 1 thay vì loại
+      if ((v.code || v.name) && !(numV(v.qty) > 0)) col('qty', '1', v.qty === '' || v.qty == null ? 'Thiếu số lượng, tool tự điền 1' : 'Số lượng không hợp lệ (' + v.qty + '), tool tự điền 1');
       const q = numV(v.qty);
       const LET = { code: 'A', name: 'B', shopCode: 'C', shop: 'D', qty: 'E', unit: 'F' };
       const left = ['code', 'name', 'shopCode', 'shop', 'qty', 'unit'].filter((k) => (k === 'qty' ? !(q > 0) : !v[k]));
@@ -2940,7 +2942,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     w.style.background = nBad ? 'var(--urgent-bg)' : 'var(--ok-bg)'; w.style.color = nBad ? 'var(--urgent)' : 'var(--ok)';
     const tabBtn = (fi, key, label, n, cls) => n ? '<button type="button" class="btn sm owtab ' + cls + '" data-owf="' + fi + '" data-owk="' + key + '" aria-pressed="false">' + label + ' (' + n.toLocaleString('vi-VN') + ')</button>' : '';
     w.innerHTML = (nBad ? '<b>⚠ Còn ' + nBad + ' dòng tool không tự sửa được, bạn cần tự sửa trong file shop rồi tải lại.</b> Tool đã tự sửa ' + nFix + ' ô khác.'
-      : '<b>Tool đã tự sửa ' + nFix + ' ô trong file shop</b> (mã nằm trong ô tên, mã và tên shop trống hoặc sai, đơn vị tính trống hoặc viết thường). Kết quả bên dưới đã dùng dữ liệu sau khi sửa.') +
+      : '<b>Tool đã tự sửa ' + nFix + ' ô trong file shop</b> (mã nằm trong ô tên, mã và tên shop trống hoặc sai, đơn vị tính trống hoặc viết thường, thiếu số lượng thì điền 1). Kết quả bên dưới đã dùng dữ liệu sau khi sửa.') +
       (nChk ? ' <b>' + nChk + ' dòng cần kiểm tra</b> (bị loại, tách sheet, mã không có trong tồn kho, nhập trùng) – xem trước khi xuất để đỡ sai sót.' : '') +
       list.map((x, i) => { const c = chkBy.get(x.name) || []; return '<div class="owfile" style="margin-top:10px"><div style="display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center"><b>' + esc(x.name) + '</b>' +
         tabBtn(i, 'bad', 'Dòng chưa sửa được', x.issues.length, 'owbad') + tabBtn(i, 'chk', 'Cảnh báo cần kiểm tra', c.length, 'owchk') + tabBtn(i, 'fix', 'Xem các ô tool đã sửa', x.fixed.length, 'ghost') +
