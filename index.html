@@ -502,6 +502,12 @@ tr.pkoff td { opacity: .45; } tr.pkoff td.pkchk { opacity: 1; }
 #gfCode { min-height: 120px; }
 .gfurl { display: flex; gap: 8px; margin-top: 12px; } .gfurl input { flex: 1; min-width: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
 a.btn { text-decoration: none; }
+.pkshops { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 10px; }
+.pkshop { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--surface); min-width: 0; color: var(--muted); }
+.pkshop.on { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
+.pkshop input { flex: none; width: 16px; height: 16px; accent-color: var(--accent); }
+.pkshop .mono { font-weight: 600; }
+.pkshopbox[hidden] { display: none; }
 .pkquota { gap: 8px 14px; align-items: center; padding: 10px 12px; background: var(--line-2); border-radius: 10px; }
 .pkquota[hidden] { display: none; } .pkqt { font-weight: 600; font-size: 13px; }
 .pkquota .pkf input { width: 64px; }
@@ -4229,7 +4235,11 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const saveUsed = (o) => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { /* trình duyệt chặn bộ nhớ */ } };
       let used = loadUsed(), pick = [], pool = [], mode = 'top', lastTot = [0, 0];
       // số mã từng ngành (chế độ "Chia số mã theo ngành"), nhớ trên trình duyệt
-      const QKEY = 'mtr_price_quota';
+      const QKEY = 'mtr_price_quota', SKEY = 'mtr_price_shops_off';
+      // shop khảo sát: lưu danh sách shop BỎ chọn (theo mã shop) để shop mới mặc định được chọn
+      const shopsOff = () => { try { return new Set(JSON.parse(localStorage.getItem(SKEY) || '[]')); } catch (e) { return new Set(); } };
+      const saveShopsOff = (set) => { try { localStorage.setItem(SKEY, JSON.stringify([...set])); } catch (e) { /* bỏ qua */ } };
+      const pickShops = () => { const off = shopsOff(); return (state.shops || []).filter((s) => !off.has(shopNo(s))); };
       const quota = () => { const q = {}; document.querySelectorAll('.pkq').forEach((i) => (q[i.dataset.ng] = Math.max(0, parseInt(i.value, 10) || 0))); return q; };
       const qMode = () => $('pickNg').value === '*';
 
@@ -4244,6 +4254,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         '<label class="pkf">Ít nhất <input type="number" id="pickMinShops" min="1" max="50" step="1" value="2"> shop có bán</label>' +
         '<label class="pkf">Ngành hàng <select id="pickNg"><option value="">Tất cả ngành</option><option value="*">Chia số mã theo ngành</option><option>THUỐC</option><option>TPCN</option><option>DƯỢC MỸ PHẨM</option><option>TRANG THIẾT BỊ Y TẾ</option><option>HÀNG TIÊU DÙNG NHANH</option></select></label>' +
         '<span class="pills" id="pickPills"></span></div>' +
+        '<details class="optdet pkshopbox" id="pickShopBox" open><summary><span class="chev"></span><b>Shop khảo sát</b> <span class="note" id="pickShopSum"></span></summary><div class="optbody"><div class="actions" style="margin:0 0 8px"><button class="btn ghost sm" id="pickShopAll" type="button">Chọn tất cả</button><button class="btn ghost sm" id="pickShopNone" type="button">Bỏ chọn tất cả</button><span class="note">Tick shop sẽ khảo sát. Mã bán chạy, Excel, ảnh và Google Form chỉ tính các shop được tick.</span></div><div class="pkshops" id="pickShops"></div></div></details>' +
         '<div class="toolbar pkquota" id="pickQuota"><span class="pkqt"><b>Số mã khảo sát theo ngành hàng</b> <span class="note">(điền 0 nếu không khảo sát ngành đó)</span></span>' + PK_NG.map((n, i) => '<label class="pkf">' + PK_NG_S[i] + ' <input type="number" class="pkq" data-ng="' + n + '" min="0" max="50" step="1" value="' + PK_NG_D[i] + '"></label>').join('') + '<span class="note" id="pickQSum"></span></div>' +
         '<div class="toolbar pickrnd"><button class="btn ghost sm" id="pickRndAll" type="button">🎲 Random lại tất cả</button><button class="btn ghost sm" id="pickRndOff" type="button">🎲 Random thay mã bỏ chọn</button><button class="btn ghost sm" id="pickTop" type="button">Về danh sách bán chạy</button>' +
         '<label class="pkf">Random trong top <input type="number" id="pickPool" min="10" max="2000" step="10" value="100"> mã</label><span class="note" id="pickSelNote"></span></div>' +
@@ -4266,8 +4277,12 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const empty = $('pickEmpty');
         if (!state.rows) { pick = []; $('pickBody').innerHTML = ''; empty.hidden = false; empty.textContent = 'Cần file tồn kho xoay vòng: nạp ở mục Hàng thiếu (file được lưu dùng chung cho mọi mục).'; return render(); }
         const ex = opts().exclAttrSet, agg = new Map();
+        renderShops();
+        const selShops = new Set(pickShops());
+        if (!selShops.size) { pick = []; $('pickBody').innerHTML = ''; empty.hidden = false; empty.textContent = 'Chưa chọn shop nào để khảo sát. Tick ít nhất 1 shop ở khung "Shop khảo sát".'; lastTot = [0, 0]; return render(0, 0); }
         state.rows.forEach((r) => {
           if (ex && ex.has(norm(r.attr))) return;
+          if (!selShops.has(r.shop)) return;
           const k = keyOf(r.prod); let a = agg.get(k);
           if (!a) { a = { key: k, code: codeOf(r.prod) || '', name: prodName(r.prod), unit: r.unit || '', nganh: r.nganh || '', loai: r.loai || '', sold: 0, shops: new Set(), ton: 0 }; agg.set(k, a); }
           a.sold += r.sold > 0 ? r.sold : 0; a.ton += r.ton > 0 ? r.ton : 0; if (r.sold > 0) a.shops.add(r.shop);
@@ -4283,7 +4298,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
           // danh sách đã chốt: giữ nguyên để xuất lại Excel / ảnh / Google Form, không đổi mã
           const byCode = new Map([...agg.values()].map((a) => [a.code, a])), info = used.cur.info || {};
           pick = used.cur.codes.map((c) => byCode.get(c) || Object.assign({ key: c, code: c, sold: 0, ton: 0, shops: new Set(), unit: '' }, info[c] || { name: '', nganh: '' })).map((a) => Object.assign(a, { on: true }));
-          locked = true; empty.hidden = true; lastTot = [all.length, fresh.length]; return render(all.length, fresh.length);
+          locked = true; empty.hidden = true; lastTot = [all.length, fresh.length]; renderShops(); return render(all.length, fresh.length);
         }
         if (qm) {
           const q = quota(); pick = [];
@@ -4305,6 +4320,21 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         selSync();
       }
       const chosen = () => pick.filter((a) => a.on);
+      /** Shop đang dùng cho danh sách: danh sách đã chốt dùng đúng các shop lúc chốt */
+      const curShops = () => (locked && used.cur && used.cur.shops ? (state.shops || []).filter((s) => used.cur.shops.includes(shopNo(s))) : pickShops());
+      function renderShops() {
+        const all = state.shops || [], box = $('pickShopBox'); if (!box) return;
+        box.hidden = !all.length; if (!all.length) return;
+        const on = new Set(curShops());
+        $('pickShops').innerHTML = all.map((s, i) => '<label class="pkshop' + (on.has(s) ? ' on' : '') + '"><input type="checkbox" data-sh="' + i + '"' + (on.has(s) ? ' checked' : '') + (locked ? ' disabled' : '') + '><span class="mono">' + esc(shopNo(s)) + '</span> ' + esc(shopLabel(s).replace(/^LC\s+/, '')) + '</label>').join('');
+        $('pickShopSum').textContent = '· ' + on.size + '/' + all.length + ' shop' + (locked ? ' (theo danh sách đã chốt)' : '');
+        $('pickShopAll').disabled = $('pickShopNone').disabled = locked;
+      }
+      function setShops(list, onFlag) { const off = shopsOff(); list.forEach((s) => (onFlag ? off.delete(shopNo(s)) : off.add(shopNo(s)))); saveShopsOff(off); build(true); }
+      $('pickShops').addEventListener('change', (e) => { const c = e.target.closest('[data-sh]'); if (!c || locked) return; setShops([state.shops[+c.dataset.sh]], c.checked); });
+      $('pickShopAll').addEventListener('click', () => { if (!locked) setShops(state.shops || [], true); });
+      $('pickShopNone').addEventListener('click', () => { if (!locked) setShops(state.shops || [], false); });
+      state.pickShopsSel = () => curShops();
       function lockUi() {
         const box = $('pickLock'); box.hidden = !state.rows || !pick.length; box.classList.toggle('on', locked);
         const at = used.cur && used.cur.at ? new Date(used.cur.at) : null, p = (n) => String(n).padStart(2, '0');
@@ -4384,9 +4414,9 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (locked) { markUsed.src = ''; return; }
         used = loadUsed(); const d = new Date().toISOString().slice(0, 10);
         sel.forEach((a) => { used.codes[a.code] = d; }); used.rounds = (used.rounds || 0) + 1; saveUsed(used);
-        const H = loadHist(); H.push({ at: new Date().toISOString(), month: monthKey(), n: used.rounds, src: markUsed.src || '', codes: sel.map((a) => ({ code: a.code, name: a.name, nganh: a.nganh || '' })) }); saveHist(H); markUsed.src = '';
-        used.cur = { at: new Date().toISOString(), codes: sel.map((a) => a.code), info: Object.fromEntries(sel.map((a) => [a.code, { name: a.name, nganh: a.nganh || '', unit: a.unit || '' }])) }; saveUsed(used);
-        pick = sel; locked = true; const n = sel.length; render(lastTot[0], Math.max(0, lastTot[1] - n)); $('pickMsg').textContent = 'Đã chốt và lưu ' + n + ' mã vào lịch sử tháng. Lần random sau sẽ không ra lại các mã này.';
+        const H = loadHist(); H.push({ at: new Date().toISOString(), month: monthKey(), n: used.rounds, src: markUsed.src || '', shops: pickShops().map(shopNo), codes: sel.map((a) => ({ code: a.code, name: a.name, nganh: a.nganh || '' })) }); saveHist(H); markUsed.src = '';
+        used.cur = { at: new Date().toISOString(), shops: pickShops().map(shopNo), codes: sel.map((a) => a.code), info: Object.fromEntries(sel.map((a) => [a.code, { name: a.name, nganh: a.nganh || '', unit: a.unit || '' }])) }; saveUsed(used);
+        pick = sel; locked = true; const n = sel.length; renderShops(); render(lastTot[0], Math.max(0, lastTot[1] - n)); $('pickMsg').textContent = 'Đã chốt và lưu ' + n + ' mã vào lịch sử tháng. Lần random sau sẽ không ra lại các mã này.';
       }
       document.querySelectorAll('.pkq').forEach((i) => i.addEventListener('change', () => { try { localStorage.setItem(QKEY, JSON.stringify(quota())); } catch (e) { /* bỏ qua */ } build(locked ? undefined : true); }));
       // nhớ lựa chọn Ngành hàng; mặc định "Chia số mã theo ngành" để luôn thấy số mã từng ngành
@@ -4418,10 +4448,12 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (typeof ExcelJS === 'undefined') { msg.textContent = 'Chưa tải được thư viện Excel.'; return; }
         const d = new Date(), p = (x) => String(x).padStart(2, '0'), fn = 'Ma_khao_sat_gia_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.xlsx';
         const rows = pk.map((a, i) => ({ nganh: a.nganh || '', stt: i + 1, code: a.code, name: a.name, unit: a.unit, sold: Math.round(a.sold * 100) / 100, shops: a.shops.size, ton: Math.round(a.ton * 100) / 100 }));
-        const form = pk.map((a) => ({ shop: '', prod: a.code + ' - ' + a.name, unit: a.unit, gs: '', dt: '', gdt: '', gv: '', gio: '', note: '' }));
+        const shs = curShops(), form = (shs.length ? shs : ['']).flatMap((sh) => pk.map((a) => ({ shop: sh ? shopNo(sh) + ' - ' + shopLabel(sh) : '', prod: a.code + ' - ' + a.name, unit: a.unit, gs: '', dt: '', gdt: '', gv: '', gio: '', note: '' })));
+        const shopRows = shs.map((sh, i) => ({ stt: i + 1, code: shopNo(sh), name: shopLabel(sh), n: pk.length }));
         const wb = makeBook([
           ['Danh sách mã khảo sát', [['STT', 'stt', 6], ['Mã sản phẩm', 'code', 14], ['Tên sản phẩm', 'name', 60], ['Ngành hàng', 'nganh', 22]], rows],
-          ['Khảo sát giá (shop điền)', [['SHOP', 'shop', 34], ['Tên thuốc', 'prod', 50], ['ĐVT', 'unit', 8], ['Đối thủ', 'dt', 22], ['Giá Long Châu', 'gs', 13], ['Giá đối thủ', 'gdt', 12], ['Giá vốn', 'gv', 12], ['Giờ nộp', 'gio', 10], ['Ghi chú', 'note', 24]], form]]);
+          ['Khảo sát giá (shop điền)', [['SHOP', 'shop', 34], ['Tên thuốc', 'prod', 50], ['ĐVT', 'unit', 8], ['Đối thủ', 'dt', 22], ['Giá Long Châu', 'gs', 13], ['Giá đối thủ', 'gdt', 12], ['Giá vốn', 'gv', 12], ['Giờ nộp', 'gio', 10], ['Ghi chú', 'note', 24]], form],
+          ['Shop khảo sát', [['STT', 'stt', 6], ['Mã shop', 'code', 10], ['Tên shop', 'name', 44], ['Số mã cần khảo sát', 'n', 16]], shopRows]]);
         try { await saveFile(fn, new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); markUsed.src = 'Tải Excel'; markUsed(); msg.textContent = 'Đã tạo ' + fn + '. ' + msg.textContent; }
         catch (e) { msg.textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không xuất được: ' + (e.message || e.code); }
       });
@@ -4430,7 +4462,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const d = new Date(), p = (x) => String(x).padStart(2, '0');
         try {
           await tableImage({ title: 'DANH SÁCH MÃ KHẢO SÁT GIÁ ĐỐI THỦ', file: 'Ma_khao_sat_gia_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.png', width: 1180,
-            sub: 'Ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · ' + pk.length + ' mã ' + ($('pickOrd').value === 'asc' ? 'bán thấp' : 'bán chạy') + ' trong khu vực · shop khảo sát giá đối thủ và điền vào file mẫu',
+            sub: 'Ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · ' + pk.length + ' mã ' + ($('pickOrd').value === 'asc' ? 'bán thấp' : 'bán chạy') + ' · Shop khảo sát (' + curShops().length + '): ' + curShops().map(shopNo).join(', '),
             cols: [{ h: 'STT', w: 64, a: 'center' }, { h: 'Mã sản phẩm', w: 150, a: 'center' }, { h: 'Tên sản phẩm', w: 0, a: 'left' }, { h: 'Ngành hàng', w: 210, a: 'left' }],
             rows: pk.map((a, i) => ({ vals: [i + 1, a.code, a.name, a.nganh || ''] })), onSaved: () => { markUsed.src = 'Xuất ảnh'; markUsed(); } }, msg);
         } catch (e) { msg.textContent = 'Không tạo được ảnh: ' + (e.message || e); }
@@ -4474,7 +4506,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const msg = $('pickMsg'), pk = chosen(); if (!pk.length) { msg.textContent = 'Chưa tick mã nào.'; return; }
         const url = gfUrl(); if (!url) { openSetup(); return; }
         const d = new Date(), p = (x) => String(x).padStart(2, '0');
-        const data = JSON.stringify({ title: 'ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' (' + pk.length + ' mã)', shops: (state.shops || []).map((s) => shopNo(s) + ' - ' + shopLabel(s)), items: pk.map((a) => [a.code, a.name, a.unit || '', a.nganh || '', a.loai || '']) });
+        const data = JSON.stringify({ title: 'ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' (' + pk.length + ' mã)', shops: curShops().map((s) => shopNo(s) + ' - ' + shopLabel(s)), items: pk.map((a) => [a.code, a.name, a.unit || '', a.nganh || '', a.loai || '']) });
         const q = encodeURIComponent(data);
         if (q.length < 7000) { let w = null; try { w = window.open(url + '?d=' + q, '_blank'); } catch (e) { w = null; } if (!w) { const a = document.createElement('a'); a.href = url + '?d=' + q; a.target = '_blank'; a.rel = 'opener'; document.body.appendChild(a); a.click(); a.remove(); } }
         else { const f = document.createElement('form'); f.method = 'POST'; f.action = url; f.target = '_blank'; const i = document.createElement('input'); i.type = 'hidden'; i.name = 'd'; i.value = data; f.appendChild(i); document.body.appendChild(f); f.submit(); f.remove(); }
@@ -4664,7 +4696,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const card = document.createElement('div'); card.className = 'panel rescard'; card.id = 'psCard'; card.hidden = true;
       card.innerHTML = '<div class="cardhead"><div><h3>Báo cáo so giá theo shop</h3><span class="note">Giá Long Châu so với giá đối thủ: cao hơn / thấp hơn / bằng giá, chi tiết từng mã</span></div>' +
         '<div class="actions"><span class="msg" id="psMsg" role="status"></span><button class="btn ghost" id="psCopy" type="button">Sao chép tin nhắn</button><button class="btn ghost" id="psImg" type="button">Xuất hình ảnh (xem trước)</button><button class="btn" id="psXls" type="button">Tải báo cáo (Excel)</button></div></div>' +
-        '<div class="stats" id="psStats"></div>' +
+        '<div class="stats" id="psStats"></div><div class="warnline" id="psMiss" hidden></div>' +
         '<div class="subnav" id="psNav" role="tablist"><button type="button" class="on" data-v="shop">Theo shop</button><button type="button" data-v="line">Chi tiết từng mã</button><button type="button" data-v="prod">Theo mã sản phẩm</button></div>' +
         '<div class="toolbar" id="psFilt" hidden><select id="psShop" aria-label="Lọc shop"></select><select id="psPl" aria-label="Lọc phân loại"><option value="">Mọi phân loại</option><option>Cao hơn</option><option>Thấp hơn</option><option>Bằng giá</option></select><input class="grow" type="text" id="psQ" placeholder="Tìm sản phẩm..."></div>' +
         '<div class="tablewrap" style="max-height:560px"><table><thead id="psHead"></thead><tbody id="psBody"></tbody></table></div><div class="msg" id="psTm"></div>';
@@ -4689,7 +4721,10 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       function render() {
         const D = data(); card.hidden = !D.it.length; if (!D.it.length) return;
         const T = D.T, pc = (a) => (T.n ? Math.round((a / T.n) * 1000) / 10 : 0).toString().replace('.', ',') + '%';
-        $('psStats').innerHTML = stat(T.shops, 'shop đã khảo sát') + stat(T.prods, 'mã sản phẩm') + stat(T.n, 'dòng giá') + stat(T.hi, 'cao hơn đối thủ (' + pc(T.hi) + ')', 'u') + stat(T.lo, 'thấp hơn đối thủ (' + pc(T.lo) + ')', 'o') + stat(T.eq, 'bằng giá (' + pc(T.eq) + ')') + (T.nr ? stat(T.nr, 'cao hơn nhưng chưa nhập giá App RSA', 'w') : '');
+        const asg = state.pickShopsSel ? state.pickShopsSel() : [], done = new Set(D.shops.map((e) => e.sc)), miss = asg.filter((x) => !done.has(shopNo(x)));
+        $('psMiss').hidden = !miss.length;
+        $('psMiss').innerHTML = miss.length ? '<b>' + miss.length + '/' + asg.length + ' shop được chọn khảo sát chưa có kết quả:</b> ' + miss.map((x) => esc(shopNo(x) + ' ' + shopLabel(x))).join(', ') : '';
+        $('psStats').innerHTML = (asg.length ? stat((asg.length - miss.length) + '/' + asg.length, 'shop được chọn đã gửi kết quả', miss.length ? 'w' : 'o') : '') + stat(T.shops, 'shop đã khảo sát') + stat(T.prods, 'mã sản phẩm') + stat(T.n, 'dòng giá') + stat(T.hi, 'cao hơn đối thủ (' + pc(T.hi) + ')', 'u') + stat(T.lo, 'thấp hơn đối thủ (' + pc(T.lo) + ')', 'o') + stat(T.eq, 'bằng giá (' + pc(T.eq) + ')') + (T.nr ? stat(T.nr, 'cao hơn nhưng chưa nhập giá App RSA', 'w') : '');
         $('psFilt').hidden = view !== 'line';
         const head = $('psHead'), body = $('psBody');
         if (view === 'shop') {
