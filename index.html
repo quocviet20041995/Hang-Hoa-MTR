@@ -502,6 +502,9 @@ tr.pkoff td { opacity: .45; } tr.pkoff td.pkchk { opacity: 1; }
 #gfCode { min-height: 120px; }
 .gfurl { display: flex; gap: 8px; margin-top: 12px; } .gfurl input { flex: 1; min-width: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
 a.btn { text-decoration: none; }
+/* nút bị khoá khi danh sách đã chốt: mờ đi, không hiện vòng xoay "đang chạy" */
+#pickShopAll[disabled], #pickShopNone[disabled], #pickRndAll[disabled], #pickRndOff[disabled] { opacity: .4; cursor: not-allowed; }
+#pickShopAll[disabled]::before, #pickShopNone[disabled]::before, #pickRndAll[disabled]::before, #pickRndOff[disabled]::before { display: none; }
 .pkshops { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 10px; }
 .pkshop { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--surface); min-width: 0; color: var(--muted); }
 .pkshop.on { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
