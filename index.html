@@ -4278,7 +4278,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (newList === true && used.cur) { delete used.cur; saveUsed(used); }
         locked = false;
         const empty = $('pickEmpty');
-        if (!state.rows) { pick = []; $('pickBody').innerHTML = ''; empty.hidden = false; empty.textContent = 'Cần file tồn kho xoay vòng: nạp ở mục Hàng thiếu (file được lưu dùng chung cho mọi mục).'; return render(); }
+        if (!state.rows) { pick = []; $('pickBody').innerHTML = ''; empty.hidden = false; empty.innerHTML = '<div class="warnline" style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center"><span><b>Chưa có file tồn kho xoay vòng</b> trên trình duyệt này nên chưa có danh sách mã. Mã bán chạy được tính từ file tồn kho (nạp 1 lần, tool tự nhớ cho mọi mục).</span><button class="btn sm" type="button" id="pickLoadStock">Nạp file tồn kho xoay vòng</button></div>'; $('pickLoadStock').onclick = () => $('file').click(); return render(); }
         const ex = opts().exclAttrSet, agg = new Map();
         renderShops();
         state.rows.forEach((r) => {
