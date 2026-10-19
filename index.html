@@ -505,6 +505,8 @@ a.btn { text-decoration: none; }
 /* nút bị khoá khi danh sách đã chốt: mờ đi, không hiện vòng xoay "đang chạy" */
 #pickRndAll[disabled], #pickRndOff[disabled] { opacity: .4; cursor: not-allowed; }
 #pickRndAll[disabled]::before, #pickRndOff[disabled]::before { display: none; }
+.pkshn { font-size: 12.5px; color: var(--ink-2); min-width: 180px; }
+.pkng.pkskip { background: var(--warn-bg); color: var(--warn); }
 .pksh { font-weight: 600; color: var(--accent); white-space: nowrap; }
 .pkshops { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 10px; }
 .pkshop { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--surface); min-width: 0; color: var(--muted); }
@@ -4239,7 +4241,13 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const saveUsed = (o) => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { /* trình duyệt chặn bộ nhớ */ } };
       let used = loadUsed(), pick = [], pool = [], mode = 'top', lastTot = [0, 0];
       // số mã từng ngành (chế độ "Chia số mã theo ngành"), nhớ trên trình duyệt
-      const QKEY = 'mtr_price_quota', SKEY = 'mtr_price_shops_off';
+      const QKEY = 'mtr_price_quota', SKEY = 'mtr_price_shops_off', CKEY = 'mtr_price_skipcnt', BAN_N = 3;
+      // số lần ASM bỏ chọn từng mã (lưu lâu dài, không mất khi sang tháng hay xoá lịch sử tháng). Bỏ đủ BAN_N lần thì loại hẳn khỏi gợi ý.
+      const loadCnt = () => { try { const o = JSON.parse(localStorage.getItem(CKEY) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } };
+      const saveCnt = (o) => { try { localStorage.setItem(CKEY, JSON.stringify(o)); } catch (e) { /* bỏ qua */ } };
+      const cntN = (c) => { const x = loadCnt()[c]; return x ? x.n || 0 : 0; };
+      const banned = (c) => cntN(c) >= BAN_N;
+      let sessSkip = new Set(); // mã đã bị tính 1 lần bỏ trong danh sách đang xem (tick lại thì trả lại)
       // shop khảo sát: lưu danh sách shop BỎ chọn (theo mã shop) để shop mới mặc định được chọn
       const shopsOff = () => { try { return new Set(JSON.parse(localStorage.getItem(SKEY) || '[]')); } catch (e) { return new Set(); } };
       const saveShopsOff = (set) => { try { localStorage.setItem(SKEY, JSON.stringify([...set])); } catch (e) { /* bỏ qua */ } };
@@ -4266,8 +4274,9 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         '<div class="ksadd"><input type="text" id="ksIn" placeholder="Dán link (Google Form / Doc / Sheet) hoặc nội dung đã chép cho tool…" spellcheck="false"><button class="btn sm" id="ksAdd" type="button">Lưu</button></div><div id="ksList"></div></div>' +
         '<div id="pickEmpty" class="note" hidden></div>' +
         '<div class="pkref" id="pickRef"></div>' +
-        '<div class="tablewrap" style="max-height:520px"><table><thead><tr><th class="pkchk"><input type="checkbox" id="pickAll" checked aria-label="Chọn tất cả"></th><th class="n">STT</th><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th><th>Shop khảo sát</th></tr></thead><tbody id="pickBody"></tbody></table></div>' +
+        '<div class="tablewrap" style="max-height:520px"><table><thead><tr><th class="pkchk"><input type="checkbox" id="pickAll" checked aria-label="Chọn tất cả"></th><th class="n">STT</th><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th><th>Shop khảo sát</th><th>Tên shop</th></tr></thead><tbody id="pickBody"></tbody></table></div>' +
         '<div class="pickfoot"><button class="btn" id="pickSave2" type="button">✔ Chọn danh sách mã này (lưu lịch sử)</button><span class="note" id="pickUsedNote" style="flex:1 1 300px"></span><button class="btn ghost sm danger" id="pickReset" type="button">Xoá lịch sử tháng này</button></div>' +
+        '<details class="optdet" id="pickBan" hidden><summary><span class="chev"></span><b>Mã bị loại hẳn</b> <span class="note" id="pickBanSum"></span></summary><div class="optbody"><div class="actions" style="margin:0 0 8px"><span class="note">Mã bạn bỏ chọn đủ ' + 3 + ' lần sẽ không được gợi ý nữa (kể cả tháng sau). Bấm Khôi phục nếu muốn khảo sát lại.</span><button class="btn ghost sm" id="pickBanAll" type="button">Khôi phục tất cả</button></div><div class="tablewrap" style="max-height:300px"><table><thead><tr><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th><th class="n">Số lần bỏ</th><th></th></tr></thead><tbody id="pickBanBody"></tbody></table></div></div></details>' +
         '<details class="optdet pkhist" id="pickHist"><summary><span class="chev"></span><b>Lịch sử các mã đã khảo sát</b> <span class="note" id="pickHistSum"></span></summary><div class="pkhbody"><div class="actions" style="margin:8px 0"><label class="pkf">Xem <select id="pickHistM"></select></label><input type="search" id="pickHistQ" placeholder="Tìm mã / tên…" style="max-width:220px"><button class="btn ghost sm" id="pickHistX" type="button">Tải lịch sử (Excel)</button><button class="btn ghost sm danger" id="pickHistDel" type="button">Xoá toàn bộ lịch sử</button></div><div id="pickHistNg" class="pkref"></div><div class="tablewrap" style="max-height:360px"><table><thead><tr><th>Ngày</th><th class="n">Lần</th><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th></tr></thead><tbody id="pickHistBody"></tbody></table></div></div></details>';
       grid.before(card);
       try { const q = JSON.parse(localStorage.getItem(QKEY) || 'null'); if (q) document.querySelectorAll('.pkq').forEach((i) => { if (q[i.dataset.ng] != null) i.value = q[i.dataset.ng]; }); } catch (e) { /* bỏ qua */ }
@@ -4281,7 +4290,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const empty = $('pickEmpty');
         if (!state.rows) { pick = []; $('pickBody').innerHTML = ''; empty.hidden = false; empty.innerHTML = '<div class="warnline" style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center"><span><b>Chưa có file tồn kho xoay vòng</b> trên trình duyệt này nên chưa có danh sách mã. Mã bán chạy được tính từ file tồn kho (nạp 1 lần, tool tự nhớ cho mọi mục).</span><button class="btn sm" type="button" id="pickLoadStock">Nạp file tồn kho xoay vòng</button></div>'; $('pickLoadStock').onclick = () => $('file').click(); return render(); }
         const ex = opts().exclAttrSet, agg = new Map();
-        renderShops();
+        renderShops(); renderBan();
         state.rows.forEach((r) => {
           if (ex && ex.has(norm(r.attr))) return;
           const k = keyOf(r.prod); let a = agg.get(k);
@@ -4293,7 +4302,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         $('pickQuota').hidden = !qm; $('pickN').closest('label').style.display = qm ? 'none' : '';
         const all = [...agg.values()].filter((a) => a.sold > 0 && a.shops.size >= minS && a.code && (!ng || qm || a.nganh === ng));
         all.sort((p, q) => (asc ? p.sold - q.sold : q.sold - p.sold) || (p.code < q.code ? -1 : 1));
-        const skip = used.skip || {}; const fresh = all.filter((a) => !used.codes[a.code] && !skip[a.code]);
+        const skip = used.skip || {}; const fresh = all.filter((a) => !used.codes[a.code] && !skip[a.code] && !banned(a.code));
+        sessSkip = new Set();
         pool = fresh; mode = 'top';
         if (used.cur && used.cur.codes && used.cur.codes.length) {
           // danh sách đã chốt: giữ nguyên để xuất lại Excel / ảnh / Google Form, không đổi mã
@@ -4313,9 +4323,9 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       }
       function render(total, fresh) {
         const asg = assignMap();
-        $('pickBody').innerHTML = pick.map((a, i) => '<tr class="' + (a.on ? '' : 'pkoff') + '"><td class="pkchk"><input type="checkbox" data-pk="' + i + '"' + (a.on ? ' checked' : '') + ' aria-label="Chọn mã ' + esc(a.code) + '"></td><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(a.code) + '</td><td>' + esc(a.name) + '</td><td>' + (a.nganh ? '<span class="pkng">' + esc(a.nganh) + '</span>' : '') + '</td><td class="mono pksh">' + (a.on && asg.has(a.code) ? esc(shopNo(asg.get(a.code))) : '') + '</td></tr>').join('');
+        $('pickBody').innerHTML = pick.map((a, i) => '<tr class="' + (a.on ? '' : 'pkoff') + '"><td class="pkchk"><input type="checkbox" data-pk="' + i + '"' + (a.on ? ' checked' : '') + ' aria-label="Chọn mã ' + esc(a.code) + '"></td><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(a.code) + '</td><td>' + esc(a.name) + (cntN(a.code) ? ' <span class="pkng pkskip" title="Số lần bạn bỏ chọn mã này. Bỏ đủ ' + BAN_N + ' lần thì mã bị loại hẳn">bỏ ' + cntN(a.code) + '/' + BAN_N + '</span>' : '') + '</td><td>' + (a.nganh ? '<span class="pkng">' + esc(a.nganh) + '</span>' : '') + '</td><td class="mono pksh">' + (a.on && asg.has(a.code) ? esc(shopNo(asg.get(a.code))) : '') + '</td><td class="pkshn">' + (a.on && asg.has(a.code) ? esc(shopLabel(asg.get(a.code)).replace(/^LC\s+/, '')) : '') + '</td></tr>').join('');
         const m = used.month.split('-'), nUsed = Object.keys(used.codes).length, nSkip = Object.keys(used.skip || {}).length;
-        $('pickPills').innerHTML = state.rows ? '<span class="pill b">Tháng ' + m[1] + '/' + m[0] + ': đã khảo sát ' + nUsed + ' mã (' + (used.rounds || 0) + ' lần)</span>' + (nSkip ? '<span class="pill w">Đã loại ' + nSkip + ' mã bỏ tick</span>' : '') + '<span class="pill">Còn ' + (fresh || 0).toLocaleString('vi-VN') + ' / ' + (total || 0).toLocaleString('vi-VN') + ' mã chưa khảo sát</span>' : '';
+        $('pickPills').innerHTML = state.rows ? '<span class="pill b">Tháng ' + m[1] + '/' + m[0] + ': đã khảo sát ' + nUsed + ' mã (' + (used.rounds || 0) + ' lần)</span>' + (nSkip ? '<span class="pill w">Đã loại ' + nSkip + ' mã bỏ tick (tháng này)</span>' : '') + (Object.values(loadCnt()).filter((x) => x.n >= BAN_N).length ? '<span class="pill u">Loại hẳn ' + Object.values(loadCnt()).filter((x) => x.n >= BAN_N).length + ' mã (bỏ ' + BAN_N + ' lần)</span>' : '') + '<span class="pill">Còn ' + (fresh || 0).toLocaleString('vi-VN') + ' / ' + (total || 0).toLocaleString('vi-VN') + ' mã chưa khảo sát</span>' : '';
         $('pickUsedNote').textContent = 'Mã được tính là đã khảo sát khi bạn bấm Chọn danh sách mã này (hoặc tải Excel, xuất ảnh, tạo Google Form). Mã bỏ tick bị loại, không gợi ý lại trong tháng (tick lại trước khi đổi danh sách để giữ). Lịch sử lưu trên trình duyệt này và tự làm mới khi sang tháng.';
         $('pickReset').hidden = !nUsed && !nSkip;
         lockUi();
@@ -4350,6 +4360,13 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       $('pickShopAll').addEventListener('click', () => setShops(state.shops || [], true));
       $('pickShopNone').addEventListener('click', () => setShops(state.shops || [], false));
       state.pickShopsSel = () => curShops();
+      function renderBan() {
+        const C = loadCnt(), L = Object.entries(C).filter(([, x]) => (x.n || 0) >= BAN_N);
+        $('pickBan').hidden = !L.length; $('pickBanSum').textContent = '· ' + L.length + ' mã (bỏ chọn từ ' + BAN_N + ' lần)';
+        $('pickBanBody').innerHTML = L.map(([c, x]) => '<tr><td class="mono">' + esc(c) + '</td><td>' + esc(x.name || '') + '</td><td>' + (x.nganh ? '<span class="pkng">' + esc(x.nganh) + '</span>' : '') + '</td><td class="n">' + x.n + '</td><td><button class="btn ghost sm" type="button" data-unban="' + esc(c) + '">Khôi phục</button></td></tr>').join('');
+      }
+      $('pickBanBody').addEventListener('click', (e) => { const b = e.target.closest('[data-unban]'); if (!b) return; const C = loadCnt(); delete C[b.dataset.unban]; saveCnt(C); renderBan(); render(lastTot[0], lastTot[1]); $('pickMsg').textContent = 'Đã khôi phục mã ' + b.dataset.unban + '. Mã sẽ được gợi ý lại ở danh sách mới.'; });
+      $('pickBanAll').addEventListener('click', () => { const C = loadCnt(); Object.keys(C).forEach((k) => { if (C[k].n >= BAN_N) delete C[k]; }); saveCnt(C); renderBan(); render(lastTot[0], lastTot[1]); $('pickMsg').textContent = 'Đã khôi phục tất cả mã bị loại hẳn.'; });
       function lockUi() {
         const box = $('pickLock'); box.hidden = !state.rows || !pick.length; box.classList.toggle('on', locked);
         const at = used.cur && used.cur.at ? new Date(used.cur.at) : null, p = (n) => String(n).padStart(2, '0');
@@ -4357,7 +4374,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         $('pickLockS').textContent = locked ? 'Đã lưu vào lịch sử tháng: lần random sau không ra lại các mã này. Vẫn tải lại Excel / ảnh / Google Form của danh sách này được. Muốn khảo sát đợt tiếp, bấm "Lấy danh sách mới".' : 'Tick chọn mã xong, bấm "Chọn danh sách mã này" để lưu vào lịch sử. Mã đã chọn sẽ không random ra nữa trong tháng, chỉ lặp lại khi bấm "Xoá lịch sử tháng này". (Tải Excel / ảnh / Google Form cũng tự lưu.)';
         $('pickSave').hidden = locked; $('pickNew').hidden = !locked;
         $('pickSave2').disabled = locked; $('pickSave2').textContent = locked ? '✔ Đã chọn & lưu danh sách này' : '✔ Chọn danh sách mã này (lưu lịch sử)';
-        ['pickRndAll', 'pickRndOff', 'pickPool'].forEach((id) => { const e = $(id); if (e) e.disabled = locked; });
+        $('pickRndOff').title = locked ? 'Danh sách đã lưu: bấm để random danh sách mới (không trùng lịch sử, bỏ các mã đã bỏ chọn)' : '';
         document.querySelectorAll('#pickBody input[data-pk], #pickAll').forEach((c) => (c.disabled = locked));
       }
       /* lịch sử khảo sát lâu dài (không xoá khi sang tháng), mỗi lần ghi nhận = 1 lần khảo sát */
@@ -4402,7 +4419,11 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
       const sortPick = () => { const asc = $('pickOrd').value === 'asc', qm = qMode(); pick.sort((p, q) => (p.on === q.on ? 0 : p.on ? -1 : 1) || (qm ? PK_NG.indexOf(p.nganh) - PK_NG.indexOf(q.nganh) : 0) || (asc ? p.sold - q.sold : q.sold - p.sold)); };
       function randomize(keepOn) {
-        if (!pool.length) return;
+        used = loadUsed();
+        const okc = (a) => !used.codes[a.code] && !(used.skip || {})[a.code] && !banned(a.code);
+        pool = pool.filter(okc);
+        if (!pool.length) { $('pickMsg').textContent = 'Không còn mã nào chưa khảo sát / chưa bỏ để random. Giảm "Ít nhất … shop có bán" hoặc xoá lịch sử tháng.'; return; }
+        if (!keepOn) sessSkip = new Set();
         const K = Math.max(10, parseInt($('pickPool').value, 10) || 100), keep = keepOn ? pick.filter((a) => a.on) : [];
         const N = keepOn ? pick.length : qMode() ? PK_NG.reduce((x, n) => x + quota()[n], 0) : Math.max(1, Math.min(100, parseInt($('pickN').value, 10) || 20));
         const excl = new Set((keepOn ? pick : []).map((a) => a.code));
@@ -4420,11 +4441,19 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         $('pickMsg').textContent = add.length < N - keep.length ? 'Chỉ còn ' + add.length + ' mã khác trong top ' + K + ' để random. Tăng "Random trong top" nếu cần thêm.' : (keepOn ? 'Đã thay ' + add.length + ' mã bỏ chọn bằng mã random.' : 'Đã random ' + add.length + ' mã trong top ' + K + '.');
         render(lastTot[0], lastTot[1]);
       }
-      $('pickRndAll').addEventListener('click', () => randomize(false));
-      $('pickRndOff').addEventListener('click', () => { if (!chosen().length || chosen().length < pick.length) randomize(true); else $('pickMsg').textContent = 'Bỏ tick các mã không cần khảo sát trước, rồi bấm để thay bằng mã random.'; });
+      // danh sách đã lưu: bấm Random = lấy danh sách mới (bỏ các mã đã có trong lịch sử và mã đã bỏ chọn) rồi random
+      $('pickRndAll').addEventListener('click', () => { if (locked) build(true); randomize(false); });
+      $('pickRndOff').addEventListener('click', () => { if (locked) { build(true); randomize(false); return; } if (!chosen().length || chosen().length < pick.length) randomize(true); else $('pickMsg').textContent = 'Bỏ tick các mã không cần khảo sát trước, rồi bấm để thay bằng mã random.'; });
       $('pickTop').addEventListener('click', () => { $('pickMsg').textContent = ''; build(true); });
       // mã bỏ tick: ghi vào danh sách loại của tháng (không gợi ý lại); tick lại thì bỏ khỏi danh sách loại
-      function setSkip(list, off) { used = loadUsed(); used.skip = used.skip || {}; const d = new Date().toISOString().slice(0, 10); list.forEach((a) => { if (off) used.skip[a.code] = d; else delete used.skip[a.code]; }); saveUsed(used); }
+      function setSkip(list, off) {
+        used = loadUsed(); used.skip = used.skip || {}; const d = new Date().toISOString().slice(0, 10), C = loadCnt();
+        list.forEach((a) => {
+          if (off) { used.skip[a.code] = d; if (!sessSkip.has(a.code)) { sessSkip.add(a.code); C[a.code] = { n: ((C[a.code] && C[a.code].n) || 0) + 1, name: a.name, nganh: a.nganh || '', at: d }; } }
+          else { delete used.skip[a.code]; if (sessSkip.has(a.code)) { sessSkip.delete(a.code); const n = ((C[a.code] && C[a.code].n) || 1) - 1; if (n > 0) C[a.code].n = n; else delete C[a.code]; } }
+        });
+        saveUsed(used); saveCnt(C); renderBan();
+      }
       $('pickBody').addEventListener('change', (e) => { const c = e.target.closest('[data-pk]'); if (!c) return; const a = pick[+c.dataset.pk]; a.on = c.checked; setSkip([a], !a.on); c.closest('tr').classList.toggle('pkoff', !a.on); lastTot[1] += a.on ? 1 : -1; render(lastTot[0], lastTot[1]); });
       $('pickAll').addEventListener('change', () => { const v = $('pickAll').checked, ch = pick.filter((a) => a.on !== v); pick.forEach((a) => (a.on = v)); setSkip(ch, !v); lastTot[1] += v ? ch.length : -ch.length; render(lastTot[0], lastTot[1]); });
       function markUsed() {
@@ -4483,8 +4512,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         try {
           await tableImage({ title: 'DANH SÁCH MÃ KHẢO SÁT GIÁ ĐỐI THỦ', file: 'Ma_khao_sat_gia_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.png', width: 1180,
             sub: 'Ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · ' + pk.length + ' mã ' + ($('pickOrd').value === 'asc' ? 'bán thấp' : 'bán chạy') + ' · Chia đều cho ' + curShops().length + ' shop: ' + [...shopCounts()].map(([s, n]) => shopNo(s) + ' (' + n + ' mã)').join(', '),
-            cols: [{ h: 'STT', w: 64, a: 'center' }, { h: 'Mã sản phẩm', w: 150, a: 'center' }, { h: 'Tên sản phẩm', w: 0, a: 'left' }, { h: 'Ngành hàng', w: 190, a: 'left' }, { h: 'Shop khảo sát', w: 120, a: 'center' }],
-            rows: (() => { const am = assignMap(); return pk.map((a, i) => ({ vals: [i + 1, a.code, a.name, a.nganh || '', am.has(a.code) ? shopNo(am.get(a.code)) : ''] })); })(), onSaved: () => { markUsed.src = 'Xuất ảnh'; markUsed(); } }, msg);
+            cols: [{ h: 'STT', w: 64, a: 'center' }, { h: 'Mã sản phẩm', w: 150, a: 'center' }, { h: 'Tên sản phẩm', w: 0, a: 'left' }, { h: 'Ngành hàng', w: 170, a: 'left' }, { h: 'Shop khảo sát', w: 300, a: 'left' }],
+            rows: (() => { const am = assignMap(); return pk.map((a, i) => ({ vals: [i + 1, a.code, a.name, a.nganh || '', am.has(a.code) ? shopNo(am.get(a.code)) + ' ' + shopLabel(am.get(a.code)).replace(/^LC\s+/, '') : ''] })); })(), onSaved: () => { markUsed.src = 'Xuất ảnh'; markUsed(); } }, msg);
         } catch (e) { msg.textContent = 'Không tạo được ảnh: ' + (e.message || e); }
       });
       /* Google Form: cài web app Apps Script 1 lần (lưu link trên trình duyệt), sau đó mỗi lần chỉ bấm 1 nút → chọn tài khoản Google → có link Form, Sheet, Doc */
