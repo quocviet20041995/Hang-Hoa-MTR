@@ -505,6 +505,7 @@ a.btn { text-decoration: none; }
 /* nút bị khoá khi danh sách đã chốt: mờ đi, không hiện vòng xoay "đang chạy" */
 #pickRndAll[disabled], #pickRndOff[disabled] { opacity: .4; cursor: not-allowed; }
 #pickRndAll[disabled]::before, #pickRndOff[disabled]::before { display: none; }
+.pksh { font-weight: 600; color: var(--accent); white-space: nowrap; }
 .pkshops { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 10px; }
 .pkshop { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--surface); min-width: 0; color: var(--muted); }
 .pkshop.on { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
@@ -4251,13 +4252,13 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const card = document.createElement('div'); card.className = 'panel rescard'; card.id = 'pickCard';
       card.innerHTML = '<div class="cardhead"><div class="sethd"><span class="stepn">1</span><div><h3>Chọn mã cần khảo sát</h3><span class="note">Mã bán chạy trong khu vực từ file tồn kho xoay vòng, không lặp lại các mã đã khảo sát trong tháng</span></div></div>' +
         '<div class="actions"><span class="msg" id="pickMsg" role="status"></span><button class="btn ghost" id="pickImg" type="button">Xuất hình ảnh (xem trước)</button><button class="btn ghost" id="pickGf" type="button">Tạo Google Form</button><button class="btn ghost sm" id="pickGfSet" type="button" title="Cài đặt / đổi link web app Google Form" aria-label="Cài đặt Google Form" hidden>⚙</button><button class="btn" id="pickXls" type="button">Tải danh sách (Excel)</button></div></div>' +
-        '<div class="pklock" id="pickLock"><div class="pklt"><b id="pickLockT"></b><span class="note" id="pickLockS"></span></div><div class="actions"><button class="btn" id="pickSave" type="button">✔ Chốt &amp; lưu danh sách này</button><button class="btn ghost" id="pickNew" type="button" hidden>Lấy danh sách mới</button></div></div>' +
+        '<div class="pklock" id="pickLock"><div class="pklt"><b id="pickLockT"></b><span class="note" id="pickLockS"></span></div><div class="actions"><button class="btn" id="pickSave" type="button">✔ Chọn danh sách mã này (lưu lịch sử)</button><button class="btn ghost" id="pickNew" type="button" hidden>Lấy danh sách mới</button></div></div>' +
         '<div class="toolbar"><label class="pkf">Số mã <input type="number" id="pickN" min="5" max="100" step="1" value="20"></label>' +
         '<label class="pkf">Thứ tự <select id="pickOrd"><option value="desc">Bán chạy nhất trước (cao → thấp)</option><option value="asc">Bán thấp trước (thấp → cao)</option></select></label>' +
         '<label class="pkf">Ít nhất <input type="number" id="pickMinShops" min="1" max="50" step="1" value="2"> shop có bán</label>' +
         '<label class="pkf">Ngành hàng <select id="pickNg"><option value="">Tất cả ngành</option><option value="*">Chia số mã theo ngành</option><option>THUỐC</option><option>TPCN</option><option>DƯỢC MỸ PHẨM</option><option>TRANG THIẾT BỊ Y TẾ</option><option>HÀNG TIÊU DÙNG NHANH</option></select></label>' +
         '<span class="pills" id="pickPills"></span></div>' +
-        '<details class="optdet pkshopbox" id="pickShopBox" open><summary><span class="chev"></span><b>Shop khảo sát</b> <span class="note" id="pickShopSum"></span></summary><div class="optbody"><div class="actions" style="margin:0 0 8px"><button class="btn ghost sm" id="pickShopAll" type="button">Chọn tất cả</button><button class="btn ghost sm" id="pickShopNone" type="button">Bỏ chọn tất cả</button><span class="note">Tick các shop được giao khảo sát danh sách mã bên dưới. Mã bán chạy vẫn tính trên tất cả shop; Excel, ảnh và Google Form ghi đúng các shop được tick. Đổi shop lúc nào cũng được, kể cả sau khi chốt.</span></div><div class="pkshops" id="pickShops"></div></div></details>' +
+        '<details class="optdet pkshopbox" id="pickShopBox" open><summary><span class="chev"></span><b>Shop khảo sát</b> <span class="note" id="pickShopSum"></span></summary><div class="optbody"><div class="actions" style="margin:0 0 8px"><button class="btn ghost sm" id="pickShopAll" type="button">Chọn tất cả</button><button class="btn ghost sm" id="pickShopNone" type="button">Bỏ chọn tất cả</button><span class="note">Tick các shop được giao khảo sát. Các mã trong danh sách được <b>chia đều</b> cho các shop này (cột "Shop khảo sát"). Mã bán chạy vẫn tính trên tất cả shop. Đổi shop lúc nào cũng được.</span></div><div class="pkshops" id="pickShops"></div></div></details>' +
         '<div class="toolbar pkquota" id="pickQuota"><span class="pkqt"><b>Số mã khảo sát theo ngành hàng</b> <span class="note">(điền 0 nếu không khảo sát ngành đó)</span></span>' + PK_NG.map((n, i) => '<label class="pkf">' + PK_NG_S[i] + ' <input type="number" class="pkq" data-ng="' + n + '" min="0" max="50" step="1" value="' + PK_NG_D[i] + '"></label>').join('') + '<span class="note" id="pickQSum"></span></div>' +
         '<div class="toolbar pickrnd"><button class="btn ghost sm" id="pickRndAll" type="button">🎲 Random lại tất cả</button><button class="btn ghost sm" id="pickRndOff" type="button">🎲 Random thay mã bỏ chọn</button><button class="btn ghost sm" id="pickTop" type="button">Về danh sách bán chạy</button>' +
         '<label class="pkf">Random trong top <input type="number" id="pickPool" min="10" max="2000" step="10" value="100"> mã</label><span class="note" id="pickSelNote"></span></div>' +
@@ -4265,8 +4266,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         '<div class="ksadd"><input type="text" id="ksIn" placeholder="Dán link (Google Form / Doc / Sheet) hoặc nội dung đã chép cho tool…" spellcheck="false"><button class="btn sm" id="ksAdd" type="button">Lưu</button></div><div id="ksList"></div></div>' +
         '<div id="pickEmpty" class="note" hidden></div>' +
         '<div class="pkref" id="pickRef"></div>' +
-        '<div class="tablewrap" style="max-height:520px"><table><thead><tr><th class="pkchk"><input type="checkbox" id="pickAll" checked aria-label="Chọn tất cả"></th><th class="n">STT</th><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th></tr></thead><tbody id="pickBody"></tbody></table></div>' +
-        '<div class="pickfoot"><span class="note" id="pickUsedNote"></span><button class="btn ghost sm danger" id="pickReset" type="button">Xoá lịch sử tháng này</button></div>' +
+        '<div class="tablewrap" style="max-height:520px"><table><thead><tr><th class="pkchk"><input type="checkbox" id="pickAll" checked aria-label="Chọn tất cả"></th><th class="n">STT</th><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th><th>Shop khảo sát</th></tr></thead><tbody id="pickBody"></tbody></table></div>' +
+        '<div class="pickfoot"><button class="btn" id="pickSave2" type="button">✔ Chọn danh sách mã này (lưu lịch sử)</button><span class="note" id="pickUsedNote" style="flex:1 1 300px"></span><button class="btn ghost sm danger" id="pickReset" type="button">Xoá lịch sử tháng này</button></div>' +
         '<details class="optdet pkhist" id="pickHist"><summary><span class="chev"></span><b>Lịch sử các mã đã khảo sát</b> <span class="note" id="pickHistSum"></span></summary><div class="pkhbody"><div class="actions" style="margin:8px 0"><label class="pkf">Xem <select id="pickHistM"></select></label><input type="search" id="pickHistQ" placeholder="Tìm mã / tên…" style="max-width:220px"><button class="btn ghost sm" id="pickHistX" type="button">Tải lịch sử (Excel)</button><button class="btn ghost sm danger" id="pickHistDel" type="button">Xoá toàn bộ lịch sử</button></div><div id="pickHistNg" class="pkref"></div><div class="tablewrap" style="max-height:360px"><table><thead><tr><th>Ngày</th><th class="n">Lần</th><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th></tr></thead><tbody id="pickHistBody"></tbody></table></div></div></details>';
       grid.before(card);
       try { const q = JSON.parse(localStorage.getItem(QKEY) || 'null'); if (q) document.querySelectorAll('.pkq').forEach((i) => { if (q[i.dataset.ng] != null) i.value = q[i.dataset.ng]; }); } catch (e) { /* bỏ qua */ }
@@ -4311,10 +4312,11 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         lastTot = [all.length, fresh.length]; render(all.length, fresh.length);
       }
       function render(total, fresh) {
-        $('pickBody').innerHTML = pick.map((a, i) => '<tr class="' + (a.on ? '' : 'pkoff') + '"><td class="pkchk"><input type="checkbox" data-pk="' + i + '"' + (a.on ? ' checked' : '') + ' aria-label="Chọn mã ' + esc(a.code) + '"></td><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(a.code) + '</td><td>' + esc(a.name) + '</td><td>' + (a.nganh ? '<span class="pkng">' + esc(a.nganh) + '</span>' : '') + '</td></tr>').join('');
+        const asg = assignMap();
+        $('pickBody').innerHTML = pick.map((a, i) => '<tr class="' + (a.on ? '' : 'pkoff') + '"><td class="pkchk"><input type="checkbox" data-pk="' + i + '"' + (a.on ? ' checked' : '') + ' aria-label="Chọn mã ' + esc(a.code) + '"></td><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(a.code) + '</td><td>' + esc(a.name) + '</td><td>' + (a.nganh ? '<span class="pkng">' + esc(a.nganh) + '</span>' : '') + '</td><td class="mono pksh">' + (a.on && asg.has(a.code) ? esc(shopNo(asg.get(a.code))) : '') + '</td></tr>').join('');
         const m = used.month.split('-'), nUsed = Object.keys(used.codes).length, nSkip = Object.keys(used.skip || {}).length;
         $('pickPills').innerHTML = state.rows ? '<span class="pill b">Tháng ' + m[1] + '/' + m[0] + ': đã khảo sát ' + nUsed + ' mã (' + (used.rounds || 0) + ' lần)</span>' + (nSkip ? '<span class="pill w">Đã loại ' + nSkip + ' mã bỏ tick</span>' : '') + '<span class="pill">Còn ' + (fresh || 0).toLocaleString('vi-VN') + ' / ' + (total || 0).toLocaleString('vi-VN') + ' mã chưa khảo sát</span>' : '';
-        $('pickUsedNote').textContent = 'Mã được tính là đã khảo sát khi bạn bấm Chốt & lưu (hoặc tải Excel, xuất ảnh, tạo Google Form). Mã bỏ tick bị loại, không gợi ý lại trong tháng (tick lại trước khi đổi danh sách để giữ). Lịch sử lưu trên trình duyệt này và tự làm mới khi sang tháng.';
+        $('pickUsedNote').textContent = 'Mã được tính là đã khảo sát khi bạn bấm Chọn danh sách mã này (hoặc tải Excel, xuất ảnh, tạo Google Form). Mã bỏ tick bị loại, không gợi ý lại trong tháng (tick lại trước khi đổi danh sách để giữ). Lịch sử lưu trên trình duyệt này và tự làm mới khi sang tháng.';
         $('pickReset').hidden = !nUsed && !nSkip;
         lockUi();
         selSync();
@@ -4322,18 +4324,27 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const chosen = () => pick.filter((a) => a.on);
       /** Shop đang dùng cho danh sách: danh sách đã chốt dùng đúng các shop lúc chốt */
       const curShops = () => { const L = pickShops(); return L.length ? L : (state.shops || []).slice(); };
+      /** Chia đều các mã đang tick cho các shop được giao: xếp theo ngành rồi chia vòng, mỗi shop có đủ các ngành và số mã chênh nhau tối đa 1 */
+      function assignMap() {
+        const sh = curShops(), m = new Map(); if (!sh.length) return m;
+        const L = chosen().slice().sort((p, q) => (PK_NG.indexOf(p.nganh) < 0 ? 99 : PK_NG.indexOf(p.nganh)) - (PK_NG.indexOf(q.nganh) < 0 ? 99 : PK_NG.indexOf(q.nganh)));
+        L.forEach((a, i) => m.set(a.code, sh[i % sh.length]));
+        return m;
+      }
+      const shopCounts = () => { const m = assignMap(), c = new Map(); curShops().forEach((s) => c.set(s, 0)); m.forEach((s) => c.set(s, (c.get(s) || 0) + 1)); return c; };
       function renderShops() {
         const all = state.shops || [], box = $('pickShopBox'); if (!box) return;
         box.hidden = !all.length; if (!all.length) return;
         const on = new Set(pickShops());
         $('pickShops').innerHTML = all.map((s, i) => '<label class="pkshop' + (on.has(s) ? ' on' : '') + '"><input type="checkbox" data-sh="' + i + '"' + (on.has(s) ? ' checked' : '') + '><span class="mono">' + esc(shopNo(s)) + '</span> ' + esc(shopLabel(s).replace(/^LC\s+/, '')) + '</label>').join('');
-        $('pickShopSum').textContent = on.size ? '· giao cho ' + on.size + '/' + all.length + ' shop' : '· chưa tick shop nào (xuất file sẽ giao cho tất cả ' + all.length + ' shop)';
+        const n = chosen().length, per = curShops().length ? Math.floor(n / curShops().length) : 0, ex = curShops().length ? n % curShops().length : 0;
+        $('pickShopSum').textContent = (on.size ? '· giao cho ' + on.size + '/' + all.length + ' shop' : '· chưa tick shop nào (giao cho tất cả ' + all.length + ' shop)') + (n ? ' · ' + n + ' mã chia đều: mỗi shop ' + (ex ? per + '–' + (per + 1) : per) + ' mã' : '');
       }
       // chọn shop chỉ là giao việc khảo sát, không đổi danh sách mã (mã bán chạy luôn tính trên tất cả shop)
       function setShops(list, onFlag) {
         const off = shopsOff(); list.forEach((s) => (onFlag ? off.delete(shopNo(s)) : off.add(shopNo(s)))); saveShopsOff(off);
         if (locked) { used = loadUsed(); if (used.cur) { used.cur.shops = curShops().map(shopNo); saveUsed(used); const H = loadHist(), last = H[H.length - 1]; if (last && last.at === used.cur.at) { last.shops = used.cur.shops; saveHist(H); } } }
-        renderShops(); if (state.psRender) state.psRender();
+        renderShops(); render(lastTot[0], lastTot[1]); if (state.psRender) state.psRender();
       }
       $('pickShops').addEventListener('change', (e) => { const c = e.target.closest('[data-sh]'); if (!c) return; setShops([state.shops[+c.dataset.sh]], c.checked); });
       $('pickShopAll').addEventListener('click', () => setShops(state.shops || [], true));
@@ -4342,9 +4353,10 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       function lockUi() {
         const box = $('pickLock'); box.hidden = !state.rows || !pick.length; box.classList.toggle('on', locked);
         const at = used.cur && used.cur.at ? new Date(used.cur.at) : null, p = (n) => String(n).padStart(2, '0');
-        $('pickLockT').textContent = locked ? '✔ Đã chốt ' + pick.length + ' mã khảo sát' + (at ? ' lúc ' + p(at.getHours()) + ':' + p(at.getMinutes()) + ' ' + p(at.getDate()) + '/' + p(at.getMonth() + 1) : '') : 'Danh sách chưa chốt';
-        $('pickLockS').textContent = locked ? 'Đã lưu vào lịch sử tháng: lần random sau không ra lại các mã này. Vẫn tải lại Excel / ảnh / Google Form của danh sách này được. Muốn khảo sát đợt tiếp, bấm "Lấy danh sách mới".' : 'Tick chọn mã xong, bấm "Chốt & lưu" để ghi nhận. Mã đã chốt sẽ không random ra nữa trong tháng, chỉ lặp lại khi bấm "Xoá lịch sử tháng này". (Tải Excel / ảnh / Google Form cũng tự chốt.)';
+        $('pickLockT').textContent = locked ? '✔ Đã chọn & lưu ' + pick.length + ' mã khảo sát' + (at ? ' lúc ' + p(at.getHours()) + ':' + p(at.getMinutes()) + ' ' + p(at.getDate()) + '/' + p(at.getMonth() + 1) : '') : 'Danh sách chưa lưu';
+        $('pickLockS').textContent = locked ? 'Đã lưu vào lịch sử tháng: lần random sau không ra lại các mã này. Vẫn tải lại Excel / ảnh / Google Form của danh sách này được. Muốn khảo sát đợt tiếp, bấm "Lấy danh sách mới".' : 'Tick chọn mã xong, bấm "Chọn danh sách mã này" để lưu vào lịch sử. Mã đã chọn sẽ không random ra nữa trong tháng, chỉ lặp lại khi bấm "Xoá lịch sử tháng này". (Tải Excel / ảnh / Google Form cũng tự lưu.)';
         $('pickSave').hidden = locked; $('pickNew').hidden = !locked;
+        $('pickSave2').disabled = locked; $('pickSave2').textContent = locked ? '✔ Đã chọn & lưu danh sách này' : '✔ Chọn danh sách mã này (lưu lịch sử)';
         ['pickRndAll', 'pickRndOff', 'pickPool'].forEach((id) => { const e = $(id); if (e) e.disabled = locked; });
         document.querySelectorAll('#pickBody input[data-pk], #pickAll').forEach((c) => (c.disabled = locked));
       }
@@ -4359,6 +4371,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const sel = chosen(), H = loadHist(), mk = monthKey(), mon = H.filter((r) => r.month === mk), monCodes = new Map();
         mon.forEach((r) => r.codes.forEach((c) => monCodes.set(c.code, c)));
         $('pickRef').innerHTML = !state.rows ? '' : '<div class="pkrow"><span class="pkrl">Đang chọn <b>' + sel.length + '</b> mã</span>' + (sel.length ? ngChips(sel) : '<span class="note">chưa tick mã nào</span>') + '</div>' +
+          (sel.length ? '<div class="pkrow"><span class="pkrl">Chia đều cho <b>' + curShops().length + '</b> shop</span>' + [...shopCounts()].map(([sh, n]) => '<span class="chip">' + esc(shopNo(sh)) + ' <b>' + n + ' mã</b></span>').join('') + '</div>' : '') +
           '<div class="pkrow"><span class="pkrl">Tháng này đã khảo sát <b>' + monCodes.size + '</b> mã / ' + mon.length + ' lần</span>' + (monCodes.size ? ngChips([...monCodes.values()]) : '<span class="note">chưa có</span>') + '</div>';
         renderHist();
       }
@@ -4382,6 +4395,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         all.checked = pick.length > 0 && n === pick.length; all.indeterminate = n > 0 && n < pick.length;
         $('pickSelNote').textContent = pick.length ? 'Đã chọn ' + n + '/' + pick.length + ' mã' + (mode === 'rnd' ? ' · danh sách random' : '') + '. Chỉ mã được tick mới xuất file/ảnh và tính là đã khảo sát.' : '';
          $('pickTop').hidden = mode !== 'rnd';
+        if ($('pickShopSum')) renderShops();
         renderRef();
       }
       // random: lấy ngẫu nhiên trong top K mã (theo thứ tự đang chọn) chưa khảo sát trong tháng
@@ -4418,9 +4432,9 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (locked) { markUsed.src = ''; return; }
         used = loadUsed(); const d = new Date().toISOString().slice(0, 10);
         sel.forEach((a) => { used.codes[a.code] = d; }); used.rounds = (used.rounds || 0) + 1; saveUsed(used);
-        const H = loadHist(); H.push({ at: new Date().toISOString(), month: monthKey(), n: used.rounds, src: markUsed.src || '', shops: curShops().map(shopNo), codes: sel.map((a) => ({ code: a.code, name: a.name, nganh: a.nganh || '' })) }); saveHist(H); markUsed.src = '';
+        const H = loadHist(); H.push({ at: new Date().toISOString(), month: monthKey(), n: used.rounds, src: markUsed.src || '', shops: curShops().map(shopNo), codes: (() => { const am = assignMap(); return sel.map((a) => ({ code: a.code, name: a.name, nganh: a.nganh || '', shop: am.has(a.code) ? shopNo(am.get(a.code)) : '' })); })() }); saveHist(H); markUsed.src = '';
         used.cur = { at: new Date().toISOString(), shops: curShops().map(shopNo), codes: sel.map((a) => a.code), info: Object.fromEntries(sel.map((a) => [a.code, { name: a.name, nganh: a.nganh || '', unit: a.unit || '' }])) }; saveUsed(used);
-        pick = sel; locked = true; const n = sel.length; renderShops(); render(lastTot[0], Math.max(0, lastTot[1] - n)); $('pickMsg').textContent = 'Đã chốt và lưu ' + n + ' mã vào lịch sử tháng. Lần random sau sẽ không ra lại các mã này.';
+        pick = sel; locked = true; const n = sel.length; renderShops(); render(lastTot[0], Math.max(0, lastTot[1] - n)); $('pickMsg').textContent = 'Đã chọn và lưu ' + n + ' mã vào lịch sử tháng. Lần random sau sẽ không ra lại các mã này.';
       }
       document.querySelectorAll('.pkq').forEach((i) => i.addEventListener('change', () => { try { localStorage.setItem(QKEY, JSON.stringify(quota())); } catch (e) { /* bỏ qua */ } build(locked ? undefined : true); }));
       // nhớ lựa chọn Ngành hàng; mặc định "Chia số mã theo ngành" để luôn thấy số mã từng ngành
@@ -4445,17 +4459,19 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         delete b.dataset.armed; b.textContent = 'Xoá lịch sử tháng này';
         saveUsed({ month: monthKey(), codes: {}, skip: {}, rounds: 0 }); saveHist(loadHist().filter((r) => r.month !== monthKey())); build(true);
         $('pickMsg').textContent = 'Đã xoá toàn bộ mã đã khảo sát của tháng này. Các mã có thể được chọn / random lại từ đầu.'; });
+      $('pickSave2').addEventListener('click', () => $('pickSave').click());
       $('pickSave').addEventListener('click', () => { if (!chosen().length) { $('pickMsg').textContent = 'Chưa tick mã nào để chốt.'; return; } markUsed.src = 'Chốt danh sách'; markUsed(); });
       $('pickNew').addEventListener('click', () => { build(true); $('pickMsg').textContent = 'Đã lấy danh sách mới (không gồm các mã đã khảo sát trong tháng).'; });
       $('pickXls').addEventListener('click', async () => {
         const msg = $('pickMsg'), pk = chosen(); if (!pk.length) { msg.textContent = 'Chưa tick mã nào để xuất.'; return; }
         if (typeof ExcelJS === 'undefined') { msg.textContent = 'Chưa tải được thư viện Excel.'; return; }
         const d = new Date(), p = (x) => String(x).padStart(2, '0'), fn = 'Ma_khao_sat_gia_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.xlsx';
-        const rows = pk.map((a, i) => ({ nganh: a.nganh || '', stt: i + 1, code: a.code, name: a.name, unit: a.unit, sold: Math.round(a.sold * 100) / 100, shops: a.shops.size, ton: Math.round(a.ton * 100) / 100 }));
-        const shs = curShops(), form = (shs.length ? shs : ['']).flatMap((sh) => pk.map((a) => ({ shop: sh ? shopNo(sh) + ' - ' + shopLabel(sh) : '', prod: a.code + ' - ' + a.name, unit: a.unit, gs: '', dt: '', gdt: '', gv: '', gio: '', note: '' })));
-        const shopRows = shs.map((sh, i) => ({ stt: i + 1, code: shopNo(sh), name: shopLabel(sh), n: pk.length }));
+        const am0 = assignMap(), rows = pk.map((a, i) => ({ nganh: a.nganh || '', stt: i + 1, code: a.code, name: a.name, unit: a.unit, sold: Math.round(a.sold * 100) / 100, shops: a.shops.size, ton: Math.round(a.ton * 100) / 100, sh: am0.has(a.code) ? shopNo(am0.get(a.code)) + ' - ' + shopLabel(am0.get(a.code)) : '' }));
+        const shs = curShops(), am = assignMap(), sc = shopCounts();
+        const form = shs.flatMap((sh) => pk.filter((a) => am.get(a.code) === sh).map((a) => ({ shop: shopNo(sh) + ' - ' + shopLabel(sh), prod: a.code + ' - ' + a.name, unit: a.unit, gs: '', dt: '', gdt: '', gv: '', gio: '', note: '' })));
+        const shopRows = shs.map((sh, i) => ({ stt: i + 1, code: shopNo(sh), name: shopLabel(sh), n: sc.get(sh) || 0 }));
         const wb = makeBook([
-          ['Danh sách mã khảo sát', [['STT', 'stt', 6], ['Mã sản phẩm', 'code', 14], ['Tên sản phẩm', 'name', 60], ['Ngành hàng', 'nganh', 22]], rows],
+          ['Danh sách mã khảo sát', [['STT', 'stt', 6], ['Mã sản phẩm', 'code', 14], ['Tên sản phẩm', 'name', 60], ['Ngành hàng', 'nganh', 22], ['Shop khảo sát', 'sh', 40]], rows],
           ['Khảo sát giá (shop điền)', [['SHOP', 'shop', 34], ['Tên thuốc', 'prod', 50], ['ĐVT', 'unit', 8], ['Đối thủ', 'dt', 22], ['Giá Long Châu', 'gs', 13], ['Giá đối thủ', 'gdt', 12], ['Giá vốn', 'gv', 12], ['Giờ nộp', 'gio', 10], ['Ghi chú', 'note', 24]], form],
           ['Shop khảo sát', [['STT', 'stt', 6], ['Mã shop', 'code', 10], ['Tên shop', 'name', 44], ['Số mã cần khảo sát', 'n', 16]], shopRows]]);
         try { await saveFile(fn, new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); markUsed.src = 'Tải Excel'; markUsed(); msg.textContent = 'Đã tạo ' + fn + '. ' + msg.textContent; }
@@ -4466,9 +4482,9 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const d = new Date(), p = (x) => String(x).padStart(2, '0');
         try {
           await tableImage({ title: 'DANH SÁCH MÃ KHẢO SÁT GIÁ ĐỐI THỦ', file: 'Ma_khao_sat_gia_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.png', width: 1180,
-            sub: 'Ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · ' + pk.length + ' mã ' + ($('pickOrd').value === 'asc' ? 'bán thấp' : 'bán chạy') + ' · Shop khảo sát (' + curShops().length + '): ' + curShops().map(shopNo).join(', '),
-            cols: [{ h: 'STT', w: 64, a: 'center' }, { h: 'Mã sản phẩm', w: 150, a: 'center' }, { h: 'Tên sản phẩm', w: 0, a: 'left' }, { h: 'Ngành hàng', w: 210, a: 'left' }],
-            rows: pk.map((a, i) => ({ vals: [i + 1, a.code, a.name, a.nganh || ''] })), onSaved: () => { markUsed.src = 'Xuất ảnh'; markUsed(); } }, msg);
+            sub: 'Ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · ' + pk.length + ' mã ' + ($('pickOrd').value === 'asc' ? 'bán thấp' : 'bán chạy') + ' · Chia đều cho ' + curShops().length + ' shop: ' + [...shopCounts()].map(([s, n]) => shopNo(s) + ' (' + n + ' mã)').join(', '),
+            cols: [{ h: 'STT', w: 64, a: 'center' }, { h: 'Mã sản phẩm', w: 150, a: 'center' }, { h: 'Tên sản phẩm', w: 0, a: 'left' }, { h: 'Ngành hàng', w: 190, a: 'left' }, { h: 'Shop khảo sát', w: 120, a: 'center' }],
+            rows: (() => { const am = assignMap(); return pk.map((a, i) => ({ vals: [i + 1, a.code, a.name, a.nganh || '', am.has(a.code) ? shopNo(am.get(a.code)) : ''] })); })(), onSaved: () => { markUsed.src = 'Xuất ảnh'; markUsed(); } }, msg);
         } catch (e) { msg.textContent = 'Không tạo được ảnh: ' + (e.message || e); }
       });
       /* Google Form: cài web app Apps Script 1 lần (lưu link trên trình duyệt), sau đó mỗi lần chỉ bấm 1 nút → chọn tài khoản Google → có link Form, Sheet, Doc */
