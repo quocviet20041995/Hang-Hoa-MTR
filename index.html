@@ -598,6 +598,8 @@ th.sortable.asc, th.sortable.desc { color: var(--accent); }
 .stalew { background: var(--warn-bg); color: var(--warn); }
 .phlast { font-size: 12px; opacity: .75; margin-top: 2px; }
 .sumbody h4 { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; opacity: .75; }
+.mfix td { vertical-align: top; padding: 6px 8px; } .mfix input { font-size: 13px; }
+.sumdlg { width: min(1100px, 96vw); }
 .sumt { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
 .sumt td { overflow-wrap: anywhere; }
 .sumt th { text-align: left; font-weight: 600; width: 38%; padding: 6px 10px 6px 0; vertical-align: top; }
@@ -2837,7 +2839,9 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       state.surveys.order = good.length ? { rows: good.flatMap((x) => x.rows), unmatched: 0 } : null;
       state.orderIssues = out.flatMap((x) => [...(x.issues || []).map((i) => Object.assign({ file: x.name, status: 'Chưa sửa được, cần shop bổ sung' }, i)), ...(x.fixed || []).map((i) => Object.assign({ file: x.name, status: 'Tool đã tự sửa' }, i))]).sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.sheet < b.sheet ? -1 : a.sheet > b.sheet ? 1 : a.line - b.line));
       const cntT = (x, ty) => x.rows.filter((r) => r.type === ty).length;
-      setSt('order', out.length ? out.map((x) => (x.err ? x.name + ': ' + x.err : x.outside ? x.name + ': shop ' + x.code + ' không thuộc khu vực của bạn (không có trong file tồn kho), bỏ qua' : x.empty ? x.name + ': ⚠ file trống – đúng form nhưng chưa có dòng đặt hàng nào (shop chưa điền hoặc nộp nhầm file mẫu), bỏ qua' : x.name + ': ' + cntT(x, 'normal') + ' dòng hàng thường, ' + cntT(x, 'cut') + ' dòng cắt liều' + (x.dropped ? ', bỏ ' + x.dropped + ' dòng không đủ thông tin' : '') + (x.unmatched ? ', bỏ ' + x.unmatched + ' dòng không rõ shop' : (x.rows.length ? '' : ', không nhận ra shop: cột Mã Shop / Tên Shop trong file trống hoặc không khớp shop trong tồn kho')))).join('\n') : 'Chưa tải file.',
+      // file/sheet trống nhưng shop đó đã có dòng đặt hàng ở file/sheet khác (gửi chung) -> không coi là chưa nộp
+      const allRows = good.flatMap((x) => x.rows), elsewhere = (x) => { const f = state.orderFiles[x.fi] || state.orderFiles.find((y) => y.name === x.name); if (!f || !f.part || !f.code) return 0; const c = f.code; return allRows.filter((r) => shopNo(r.shopR || r.shop) === c).length; };
+      setSt('order', out.length ? out.map((x) => (x.err ? x.name + ': ' + x.err : x.outside ? x.name + ': shop ' + x.code + ' không thuộc khu vực của bạn (không có trong file tồn kho), bỏ qua' : x.empty && elsewhere(x) ? x.name + ': sheet trống – shop đã đặt chung ở file/sheet khác (' + elsewhere(x) + ' dòng), không thiếu' : x.empty ? x.name + ': ⚠ file trống – đúng form nhưng chưa có dòng đặt hàng nào (shop chưa điền hoặc nộp nhầm file mẫu), bỏ qua' : x.name + ': ' + cntT(x, 'normal') + ' dòng hàng thường, ' + cntT(x, 'cut') + ' dòng cắt liều' + (x.dropped ? ', bỏ ' + x.dropped + ' dòng không đủ thông tin' : '') + (x.unmatched ? ', bỏ ' + x.unmatched + ' dòng không rõ shop' : (x.rows.length ? '' : ', không nhận ra shop: cột Mã Shop / Tên Shop trong file trống hoặc không khớp shop trong tồn kho')))).join('\n') : 'Chưa tải file.',
         out.some((x) => !x.empty && !x.outside && (x.err || x.unmatched || x.dropped || !x.rows.length)) ? 'bad' : out.length ? 'ok' : '');
       { const st = $('st-order'); if (st && out.length) { const lines = st.textContent.split('\n'); st.innerHTML = lines.map((l, i) => '<div class="fline"><span>' + esc(l) + '</span>' + (out[i] ? '<button type="button" class="fx" data-rmf="' + i + '" title="Bỏ riêng file này" aria-label="Bỏ file ' + esc(out[i].name) + '">✕</button>' : '') + '</div>').join('');
         st.querySelectorAll('[data-rmf]').forEach((b) => b.addEventListener('click', () => { const f = out[+b.dataset.rmf]; if (!f) return; const nn = (x) => String(x || '').normalize('NFC').trim().toLowerCase();
@@ -2862,13 +2866,15 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     (state.rows || []).forEach((r) => { const c = codeOf(r.prod); if (c) { const k = r.shop + '\u0000' + c; if (!stockBy.has(k)) stockBy.set(k, r); const anyK = '*\u0000' + c; if (!stockBy.has(anyK)) stockBy.set(anyK, r); } const nk = r.shop + '\u0000' + nameOf(r.prod); if (!nameBy.has(nk)) nameBy.set(nk, r); });
     const log = [], out = { cut: [], normal: [] };
     for (const it of f.all) {
-      const v = Object.assign({}, it.raw), col = (k, nv, why) => { if (nv && nv !== v[k]) { log.push({ sheet: it.sheet, line: it.line, col: FORM_LABEL[k], old: v[k], val: nv, why }); v[k] = nv; } };
+      const v = Object.assign({}, it.raw), mf = state.manualFix && state.manualFix.get(f.name + '\u0000' + it.sheet + '\u0000' + it.line), col = (k, nv, why) => { if (nv && nv !== v[k]) { log.push({ sheet: it.sheet, line: it.line, col: FORM_LABEL[k], old: v[k], val: nv, why }); v[k] = nv; } };
+      if (mf) for (const k of ['code', 'name', 'shopCode', 'shop', 'qty', 'unit']) if (mf[k] != null && String(mf[k]).trim() !== '' && String(mf[k]).trim() !== String(v[k] || '').trim()) col(k, String(mf[k]).trim(), 'Người dùng sửa khi xuất file');
       if (v.code && fixCode(v.code) !== String(v.code).trim()) col('code', fixCode(v.code), 'Mã bị mất số 0 đầu (Excel tự xoá), tool bù lại đủ 8 số');
       const m = v.name.match(/^\s*([A-Za-z]{0,2}\d{5,})\s*-\s*(.*)$/);
       if (m) { if (!v.code) col('code', fixCode(m[1]), 'Mã nằm trong ô tên'); else if (v.code !== fixCode(m[1])) log.push({ sheet: it.sheet, line: it.line, col: FORM_LABEL.code, old: v.code, val: v.code, why: 'Mã trong ô tên (' + m[1] + ') khác ô mã, giữ ô mã, cần kiểm tra', bad: true }); col('name', m[2].trim(), 'Bỏ mã khỏi ô tên'); }
       // Ưu tiên mã shop (chính xác); tên shop chỉ dùng khi mã trống/sai. Mã đúng thì giữ nguyên tên shop của file.
       const sByCode = v.shopCode ? rs(String(v.shopCode).trim()) : null, sByName = v.shop ? rs(v.shop) : null;
-      // Mã và tên shop chỉ hai shop khác nhau: lấy shop chính của file (nhiều dòng nhất), không thì lấy theo mã
+      // Mã và tên shop cùng chỉ 1 shop -> lấy shop đó (file gửi chung nhiều shop vẫn tách đúng).
+      // Mã và tên chỉ 2 shop khác nhau (hay gặp khi kéo chuột làm mã shop tự tăng 80829, 80830…): lấy shop chính của file nếu trùng tên, không thì lấy theo mã
       let shop = sByCode && sByName && sByCode !== sByName ? (sByName === def ? sByName : sByCode) : (sByCode || sByName || '');
       if (!shop) shop = def || '';
       if (shop) {
@@ -2986,6 +2992,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     try {
       if (k === 'order') {
         const list = []; // mỗi lần chọn file: chỉ tính các file vừa chọn, bỏ danh sách cũ
+        state.manualFix = new Map(); // nạp file mới: bỏ các sửa tay của lần trước
         const nn = (x) => String(x || '').normalize('NFC').trim().toLowerCase();
         const add = (name, size, aoas, code, part) => {
           const p = parseAny('order', aoas, '');
@@ -4214,10 +4221,35 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
           document.body.appendChild(sd);
           const close = () => { try { sd.close(); } catch (e) { sd.removeAttribute('open'); } };
           $('sumX').onclick = close; $('sumBack').onclick = () => { close(); if (nUnfixed() || orderChecks().length) window.__mtrOrdTab('chk'); };
-          $('sumOk').onclick = () => { close(); exportOrder(); };
+          $('sumOk').onclick = () => {
+            const bad = sd._bad || []; let n = 0;
+            sd.querySelectorAll('tr[data-mi]').forEach((tr) => {
+              const i = bad[+tr.dataset.mi]; if (!i) return;
+              const f = (state.orderFiles || []).find((x) => x.name === i.file), it = f && (f.all || []).find((a) => a.sheet === i.sheet && a.line === i.line), raw = it ? it.raw : {};
+              const m = {}; let changed = false;
+              tr.querySelectorAll('[data-mk]').forEach((e) => { const k = e.dataset.mk, val = e.value.trim(); m[k] = val; if (val !== String(raw[k] == null ? '' : raw[k]).trim()) changed = true; });
+              if (m.code) m.code = fixCode(m.code);
+              if (changed) { (state.manualFix = state.manualFix || new Map()).set(i.file + '\u0000' + i.sheet + '\u0000' + i.line, m); n++; }
+            });
+            close();
+            if (n) { reattach('order'); refreshAll(); }
+            const left = nUnfixed();
+            exportOrder();
+            setTimeout(() => { const x = $('xm-order'); if (x && n) x.textContent = (n ? 'Đã cập nhật ' + n + ' dòng bạn sửa vào file. ' : '') + x.textContent; }, 400);
+          };
         }
         const L = window.__mtrOrderInfo(), grps = [...new Set(L.map((x) => x.grp))];
-        $('sumBody').innerHTML = grps.map((gname) => '<h4>' + gname + '</h4><table class="sumt"><tbody>' + L.filter((x) => x.grp === gname).map((x) => '<tr class="' + x.lv + '"><th>' + esc(x.k) + '</th><td>' + (x.lv ? (x.lv === 'u' ? '⛔ ' : '⚠ ') : '') + esc(x.v) + '</td></tr>').join('') + '</tbody></table>').join('');
+        // các dòng tool không tự sửa được: cho người dùng sửa ngay tại đây, không sửa thì bị loại khỏi file
+        const bad = (state.orderIssues || []).filter((i) => i.status && i.status.startsWith('Chưa'));
+        const rawOf = (i) => { const f = (state.orderFiles || []).find((x) => x.name === i.file); const it = f && (f.all || []).find((a) => a.sheet === i.sheet && a.line === i.line); const mf = state.manualFix && state.manualFix.get(i.file + '\u0000' + i.sheet + '\u0000' + i.line); return Object.assign({}, it ? it.raw : {}, mf || {}); };
+        sd._bad = bad;
+        const inp = (k, v, w, ph) => '<input type="text" data-mk="' + k + '" value="' + esc(v == null ? '' : v) + '" placeholder="' + ph + '" style="width:' + w + 'px;min-height:30px;padding:4px 7px">';
+        const fixHtml = bad.length ? '<h4 style="color:var(--urgent)">⛔ ' + bad.length + ' dòng tool không tự sửa được – sửa trực tiếp tại đây</h4><p class="note" style="margin:0 0 8px">Điền phần còn thiếu (thường là Mã sản phẩm). Dòng nào bạn sửa sẽ được đưa vào file đặt hàng theo đúng giá trị bạn nhập; dòng nào để nguyên sẽ <b>bị loại</b> khỏi file khi bấm Xuất.</p>' +
+          '<div class="tablewrap" style="max-height:340px"><table class="mfix"><thead><tr><th>File / sheet · dòng</th><th>Lỗi</th><th>Mã SP</th><th>Tên SP</th><th>Mã shop</th><th class="n">SL</th><th>ĐVT</th></tr></thead><tbody>' +
+          bad.slice(0, 300).map((i, n) => { const r = rawOf(i); return '<tr data-mi="' + n + '"><td class="note">' + esc(i.file.replace(/^.*› /, '')) + '<br>' + esc(i.sheet) + ' · dòng ' + i.line + '</td><td class="note" style="min-width:160px">' + esc(i.text) + '</td><td>' + inp('code', r.code, 100, 'Mã SP') + '</td><td>' + inp('name', r.name, 200, 'Tên (có thể bỏ trống)') + '</td><td>' + inp('shopCode', r.shopCode, 70, 'Mã shop') + '</td><td>' + inp('qty', r.qty, 54, 'SL') + '</td><td>' + inp('unit', r.unit, 64, 'ĐVT') + '</td></tr>'; }).join('') +
+          '</tbody></table></div>' + (bad.length > 300 ? '<div class="note">Hiển thị 300 / ' + bad.length + ' dòng đầu. Các dòng còn lại sửa trong file shop rồi nạp lại.</div>' : '') : '';
+        $('sumOk').textContent = bad.length ? 'Cập nhật dòng đã sửa & xuất file' : 'Xuất file Excel';
+        $('sumBody').innerHTML = fixHtml + grps.map((gname) => '<h4>' + gname + '</h4><table class="sumt"><tbody>' + L.filter((x) => x.grp === gname).map((x) => '<tr class="' + x.lv + '"><th>' + esc(x.k) + '</th><td>' + (x.lv ? (x.lv === 'u' ? '⛔ ' : '⚠ ') : '') + esc(x.v) + '</td></tr>').join('') + '</tbody></table>').join('');
         const nw = L.filter((x) => x.lv).length; $('sumMsg').textContent = nw ? nw + ' mục cần lưu ý (đánh dấu ⚠/⛔)' : 'Mọi thứ ổn.';
         try { sd.showModal(); } catch (e) { sd.setAttribute('open', ''); }
       };
