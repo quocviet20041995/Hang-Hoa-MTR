@@ -2863,7 +2863,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
   const prodOfLog = (f, l) => { const it = f.all.find((a) => a.sheet === l.sheet && a.line === l.line); if (!it) return ''; const r = it.raw; return ((r.code ? r.code + ' - ' : '') + r.name).trim(); };
   function fixShopFile(f, def) {
     const rs = resolver(), stockBy = new Map(), nameBy = new Map();
-    (state.rows || []).forEach((r) => { const c = codeOf(r.prod); if (c) { const k = r.shop + '\u0000' + c; if (!stockBy.has(k)) stockBy.set(k, r); const anyK = '*\u0000' + c; if (!stockBy.has(anyK)) stockBy.set(anyK, r); } const nk = r.shop + '\u0000' + nameOf(r.prod); if (!nameBy.has(nk)) nameBy.set(nk, r); });
+    (state.rows || []).forEach((r) => { const c = codeOf(r.prod); if (c) { const k = r.shop + '\u0000' + c; if (!stockBy.has(k)) stockBy.set(k, r); const anyK = '*\u0000' + c; if (!stockBy.has(anyK)) stockBy.set(anyK, r); } const nk = r.shop + '\u0000' + nameOf(r.prod); if (!nameBy.has(nk)) nameBy.set(nk, r); const ak = '*\u0000' + nameOf(r.prod); if (!nameBy.has(ak)) nameBy.set(ak, r); });
     const log = [], out = { cut: [], normal: [] };
     for (const it of f.all) {
       const v = Object.assign({}, it.raw), mf = state.manualFix && state.manualFix.get(f.name + '\u0000' + it.sheet + '\u0000' + it.line), col = (k, nv, why) => { if (nv && nv !== v[k]) { log.push({ sheet: it.sheet, line: it.line, col: FORM_LABEL[k], old: v[k], val: nv, why }); v[k] = nv; } };
@@ -2883,8 +2883,9 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         else if (sByName ? sByName !== shop : !sByCode) col('shop', shopLabel(shop), sByName ? 'Tên shop khác mã shop, lấy theo mã shop' : 'Tên shop theo file tồn kho');
       }
       let st = v.code ? stockBy.get(shop + '\u0000' + v.code) || stockBy.get('*\u0000' + v.code) : null;
-      if (!v.code && v.name) { const hit = nameBy.get(shop + '\u0000' + nameOf(v.name)); if (hit) { col('code', codeOf(hit.prod), 'Tìm mã theo tên trong tồn kho'); st = hit; } }
-      if (st) { if (!v.name) col('name', prodName(st.prod), 'Thiếu tên sản phẩm'); if (!v.unit) col('unit', capUnit(st.unit), 'Thiếu đơn vị tính'); }
+      // có tên mà thiếu mã: tìm mã theo tên trong tồn kho xoay vòng (ưu tiên đúng shop, không có thì shop khác)
+      if (!v.code && v.name) { const hit = nameBy.get(shop + '\u0000' + nameOf(v.name)) || nameBy.get('*\u0000' + nameOf(v.name)); if (hit) { col('code', codeOf(hit.prod), 'Thiếu mã sản phẩm, tool lấy theo tên trong tồn kho'); st = hit; } }
+      if (st) { if (!v.name) col('name', prodName(st.prod), 'Thiếu tên sản phẩm, tool lấy theo mã trong tồn kho'); if (!v.unit) col('unit', capUnit(st.unit), 'Thiếu đơn vị tính'); }
       if (v.unit && v.unit !== capUnit(v.unit)) col('unit', capUnit(v.unit), 'Chuẩn hoá chữ hoa');
       // có mã / tên sản phẩm nhưng chưa điền số lượng (hoặc số lượng ≤ 0) -> tự điền 1 thay vì loại
       if ((v.code || v.name) && !(numV(v.qty) > 0)) col('qty', '1', v.qty === '' || v.qty == null ? 'Thiếu số lượng, tool tự điền 1' : 'Số lượng không hợp lệ (' + v.qty + '), tool tự điền 1');
@@ -2948,7 +2949,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     w.style.background = nBad ? 'var(--urgent-bg)' : 'var(--ok-bg)'; w.style.color = nBad ? 'var(--urgent)' : 'var(--ok)';
     const tabBtn = (fi, key, label, n, cls) => n ? '<button type="button" class="btn sm owtab ' + cls + '" data-owf="' + fi + '" data-owk="' + key + '" aria-pressed="false">' + label + ' (' + n.toLocaleString('vi-VN') + ')</button>' : '';
     w.innerHTML = (nBad ? '<b>⚠ Còn ' + nBad + ' dòng tool không tự sửa được, bạn cần tự sửa trong file shop rồi tải lại.</b> Tool đã tự sửa ' + nFix + ' ô khác.'
-      : '<b>Tool đã tự sửa ' + nFix + ' ô trong file shop</b> (mã nằm trong ô tên, mã và tên shop trống hoặc sai, đơn vị tính trống hoặc viết thường, thiếu số lượng thì điền 1). Kết quả bên dưới đã dùng dữ liệu sau khi sửa.') +
+      : '<b>Tool đã tự sửa ' + nFix + ' ô trong file shop</b> (mã nằm trong ô tên, mã và tên shop trống hoặc sai, đơn vị tính trống hoặc viết thường, thiếu số lượng thì điền 1, thiếu tên thì lấy theo mã – thiếu mã thì lấy theo tên trong tồn kho). Kết quả bên dưới đã dùng dữ liệu sau khi sửa.') +
       (nChk ? ' <b>' + nChk + ' dòng cần kiểm tra</b> (bị loại, tách sheet, mã không có trong tồn kho, nhập trùng) – xem trước khi xuất để đỡ sai sót.' : '') +
       list.map((x, i) => { const c = chkBy.get(x.name) || []; return '<div class="owfile" style="margin-top:10px"><div style="display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center"><b>' + esc(x.name) + '</b>' +
         tabBtn(i, 'bad', 'Dòng chưa sửa được', x.issues.length, 'owbad') + tabBtn(i, 'chk', 'Cảnh báo cần kiểm tra', c.length, 'owchk') + tabBtn(i, 'fix', 'Xem các ô tool đã sửa', x.fixed.length, 'ghost') +
@@ -4249,6 +4250,15 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
           bad.slice(0, 300).map((i, n) => { const r = rawOf(i); return '<tr data-mi="' + n + '"><td class="note">' + esc(i.file.replace(/^.*› /, '')) + '<br>' + esc(i.sheet) + ' · dòng ' + i.line + '</td><td class="note" style="min-width:160px">' + esc(i.text) + '</td><td>' + inp('code', r.code, 100, 'Mã SP') + '</td><td>' + inp('name', r.name, 200, 'Tên (có thể bỏ trống)') + '</td><td>' + inp('shopCode', r.shopCode, 70, 'Mã shop') + '</td><td>' + inp('qty', r.qty, 54, 'SL') + '</td><td>' + inp('unit', r.unit, 64, 'ĐVT') + '</td></tr>'; }).join('') +
           '</tbody></table></div>' + (bad.length > 300 ? '<div class="note">Hiển thị 300 / ' + bad.length + ' dòng đầu. Các dòng còn lại sửa trong file shop rồi nạp lại.</div>' : '') : '';
         $('sumOk').textContent = bad.length ? 'Cập nhật dòng đã sửa & xuất file' : 'Xuất file Excel';
+        setTimeout(() => {
+          // gõ mã -> tự hiện tên theo tồn kho; gõ tên -> tự điền mã nếu tên khớp tồn kho
+          const byC = new Map(), byN = new Map(); (state.rows || []).forEach((r) => { const c = codeOf(r.prod); if (c && !byC.has(c)) byC.set(c, r); const n = nameOf(r.prod); if (!byN.has(n)) byN.set(n, r); });
+          sd.querySelectorAll('tr[data-mi]').forEach((tr) => {
+            const ci = tr.querySelector('[data-mk="code"]'), ni = tr.querySelector('[data-mk="name"]'), ui = tr.querySelector('[data-mk="unit"]');
+            ci.addEventListener('input', () => { const r = byC.get(fixCode(ci.value)); if (r) { ni.value = prodName(r.prod); if (!ui.value) ui.value = capUnit(r.unit || ''); ci.style.borderColor = 'var(--ok)'; } else ci.style.borderColor = ci.value ? 'var(--warn)' : ''; });
+            ni.addEventListener('change', () => { if (ci.value) return; const r = byN.get(nameOf(ni.value)); if (r) { ci.value = codeOf(r.prod); if (!ui.value) ui.value = capUnit(r.unit || ''); ci.style.borderColor = 'var(--ok)'; } });
+          });
+        }, 0);
         $('sumBody').innerHTML = fixHtml + grps.map((gname) => '<h4>' + gname + '</h4><table class="sumt"><tbody>' + L.filter((x) => x.grp === gname).map((x) => '<tr class="' + x.lv + '"><th>' + esc(x.k) + '</th><td>' + (x.lv ? (x.lv === 'u' ? '⛔ ' : '⚠ ') : '') + esc(x.v) + '</td></tr>').join('') + '</tbody></table>').join('');
         const nw = L.filter((x) => x.lv).length; $('sumMsg').textContent = nw ? nw + ' mục cần lưu ý (đánh dấu ⚠/⛔)' : 'Mọi thứ ổn.';
         try { sd.showModal(); } catch (e) { sd.setAttribute('open', ''); }
