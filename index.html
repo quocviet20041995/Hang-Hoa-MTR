@@ -503,8 +503,8 @@ tr.pkoff td { opacity: .45; } tr.pkoff td.pkchk { opacity: 1; }
 .gfurl { display: flex; gap: 8px; margin-top: 12px; } .gfurl input { flex: 1; min-width: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
 a.btn { text-decoration: none; }
 /* nút bị khoá khi danh sách đã chốt: mờ đi, không hiện vòng xoay "đang chạy" */
-#pickShopAll[disabled], #pickShopNone[disabled], #pickRndAll[disabled], #pickRndOff[disabled] { opacity: .4; cursor: not-allowed; }
-#pickShopAll[disabled]::before, #pickShopNone[disabled]::before, #pickRndAll[disabled]::before, #pickRndOff[disabled]::before { display: none; }
+#pickRndAll[disabled], #pickRndOff[disabled] { opacity: .4; cursor: not-allowed; }
+#pickRndAll[disabled]::before, #pickRndOff[disabled]::before { display: none; }
 .pkshops { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 10px; }
 .pkshop { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--surface); min-width: 0; color: var(--muted); }
 .pkshop.on { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
@@ -4257,7 +4257,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         '<label class="pkf">Ít nhất <input type="number" id="pickMinShops" min="1" max="50" step="1" value="2"> shop có bán</label>' +
         '<label class="pkf">Ngành hàng <select id="pickNg"><option value="">Tất cả ngành</option><option value="*">Chia số mã theo ngành</option><option>THUỐC</option><option>TPCN</option><option>DƯỢC MỸ PHẨM</option><option>TRANG THIẾT BỊ Y TẾ</option><option>HÀNG TIÊU DÙNG NHANH</option></select></label>' +
         '<span class="pills" id="pickPills"></span></div>' +
-        '<details class="optdet pkshopbox" id="pickShopBox" open><summary><span class="chev"></span><b>Shop khảo sát</b> <span class="note" id="pickShopSum"></span></summary><div class="optbody"><div class="actions" style="margin:0 0 8px"><button class="btn ghost sm" id="pickShopAll" type="button">Chọn tất cả</button><button class="btn ghost sm" id="pickShopNone" type="button">Bỏ chọn tất cả</button><span class="note">Tick shop sẽ khảo sát. Mã bán chạy, Excel, ảnh và Google Form chỉ tính các shop được tick.</span></div><div class="pkshops" id="pickShops"></div></div></details>' +
+        '<details class="optdet pkshopbox" id="pickShopBox" open><summary><span class="chev"></span><b>Shop khảo sát</b> <span class="note" id="pickShopSum"></span></summary><div class="optbody"><div class="actions" style="margin:0 0 8px"><button class="btn ghost sm" id="pickShopAll" type="button">Chọn tất cả</button><button class="btn ghost sm" id="pickShopNone" type="button">Bỏ chọn tất cả</button><span class="note">Tick các shop được giao khảo sát danh sách mã bên dưới. Mã bán chạy vẫn tính trên tất cả shop; Excel, ảnh và Google Form ghi đúng các shop được tick. Đổi shop lúc nào cũng được, kể cả sau khi chốt.</span></div><div class="pkshops" id="pickShops"></div></div></details>' +
         '<div class="toolbar pkquota" id="pickQuota"><span class="pkqt"><b>Số mã khảo sát theo ngành hàng</b> <span class="note">(điền 0 nếu không khảo sát ngành đó)</span></span>' + PK_NG.map((n, i) => '<label class="pkf">' + PK_NG_S[i] + ' <input type="number" class="pkq" data-ng="' + n + '" min="0" max="50" step="1" value="' + PK_NG_D[i] + '"></label>').join('') + '<span class="note" id="pickQSum"></span></div>' +
         '<div class="toolbar pickrnd"><button class="btn ghost sm" id="pickRndAll" type="button">🎲 Random lại tất cả</button><button class="btn ghost sm" id="pickRndOff" type="button">🎲 Random thay mã bỏ chọn</button><button class="btn ghost sm" id="pickTop" type="button">Về danh sách bán chạy</button>' +
         '<label class="pkf">Random trong top <input type="number" id="pickPool" min="10" max="2000" step="10" value="100"> mã</label><span class="note" id="pickSelNote"></span></div>' +
@@ -4281,11 +4281,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (!state.rows) { pick = []; $('pickBody').innerHTML = ''; empty.hidden = false; empty.textContent = 'Cần file tồn kho xoay vòng: nạp ở mục Hàng thiếu (file được lưu dùng chung cho mọi mục).'; return render(); }
         const ex = opts().exclAttrSet, agg = new Map();
         renderShops();
-        const selShops = new Set(pickShops());
-        if (!selShops.size) { pick = []; $('pickBody').innerHTML = ''; empty.hidden = false; empty.textContent = 'Chưa chọn shop nào để khảo sát. Tick ít nhất 1 shop ở khung "Shop khảo sát".'; lastTot = [0, 0]; return render(0, 0); }
         state.rows.forEach((r) => {
           if (ex && ex.has(norm(r.attr))) return;
-          if (!selShops.has(r.shop)) return;
           const k = keyOf(r.prod); let a = agg.get(k);
           if (!a) { a = { key: k, code: codeOf(r.prod) || '', name: prodName(r.prod), unit: r.unit || '', nganh: r.nganh || '', loai: r.loai || '', sold: 0, shops: new Set(), ton: 0 }; agg.set(k, a); }
           a.sold += r.sold > 0 ? r.sold : 0; a.ton += r.ton > 0 ? r.ton : 0; if (r.sold > 0) a.shops.add(r.shop);
@@ -4324,19 +4321,23 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       }
       const chosen = () => pick.filter((a) => a.on);
       /** Shop đang dùng cho danh sách: danh sách đã chốt dùng đúng các shop lúc chốt */
-      const curShops = () => (locked && used.cur && used.cur.shops ? (state.shops || []).filter((s) => used.cur.shops.includes(shopNo(s))) : pickShops());
+      const curShops = () => { const L = pickShops(); return L.length ? L : (state.shops || []).slice(); };
       function renderShops() {
         const all = state.shops || [], box = $('pickShopBox'); if (!box) return;
         box.hidden = !all.length; if (!all.length) return;
-        const on = new Set(curShops());
-        $('pickShops').innerHTML = all.map((s, i) => '<label class="pkshop' + (on.has(s) ? ' on' : '') + '"><input type="checkbox" data-sh="' + i + '"' + (on.has(s) ? ' checked' : '') + (locked ? ' disabled' : '') + '><span class="mono">' + esc(shopNo(s)) + '</span> ' + esc(shopLabel(s).replace(/^LC\s+/, '')) + '</label>').join('');
-        $('pickShopSum').textContent = '· ' + on.size + '/' + all.length + ' shop' + (locked ? ' (theo danh sách đã chốt)' : '');
-        $('pickShopAll').disabled = $('pickShopNone').disabled = locked;
+        const on = new Set(pickShops());
+        $('pickShops').innerHTML = all.map((s, i) => '<label class="pkshop' + (on.has(s) ? ' on' : '') + '"><input type="checkbox" data-sh="' + i + '"' + (on.has(s) ? ' checked' : '') + '><span class="mono">' + esc(shopNo(s)) + '</span> ' + esc(shopLabel(s).replace(/^LC\s+/, '')) + '</label>').join('');
+        $('pickShopSum').textContent = on.size ? '· giao cho ' + on.size + '/' + all.length + ' shop' : '· chưa tick shop nào (xuất file sẽ giao cho tất cả ' + all.length + ' shop)';
       }
-      function setShops(list, onFlag) { const off = shopsOff(); list.forEach((s) => (onFlag ? off.delete(shopNo(s)) : off.add(shopNo(s)))); saveShopsOff(off); build(true); }
-      $('pickShops').addEventListener('change', (e) => { const c = e.target.closest('[data-sh]'); if (!c || locked) return; setShops([state.shops[+c.dataset.sh]], c.checked); });
-      $('pickShopAll').addEventListener('click', () => { if (!locked) setShops(state.shops || [], true); });
-      $('pickShopNone').addEventListener('click', () => { if (!locked) setShops(state.shops || [], false); });
+      // chọn shop chỉ là giao việc khảo sát, không đổi danh sách mã (mã bán chạy luôn tính trên tất cả shop)
+      function setShops(list, onFlag) {
+        const off = shopsOff(); list.forEach((s) => (onFlag ? off.delete(shopNo(s)) : off.add(shopNo(s)))); saveShopsOff(off);
+        if (locked) { used = loadUsed(); if (used.cur) { used.cur.shops = curShops().map(shopNo); saveUsed(used); const H = loadHist(), last = H[H.length - 1]; if (last && last.at === used.cur.at) { last.shops = used.cur.shops; saveHist(H); } } }
+        renderShops(); if (state.psRender) state.psRender();
+      }
+      $('pickShops').addEventListener('change', (e) => { const c = e.target.closest('[data-sh]'); if (!c) return; setShops([state.shops[+c.dataset.sh]], c.checked); });
+      $('pickShopAll').addEventListener('click', () => setShops(state.shops || [], true));
+      $('pickShopNone').addEventListener('click', () => setShops(state.shops || [], false));
       state.pickShopsSel = () => curShops();
       function lockUi() {
         const box = $('pickLock'); box.hidden = !state.rows || !pick.length; box.classList.toggle('on', locked);
@@ -4417,8 +4418,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (locked) { markUsed.src = ''; return; }
         used = loadUsed(); const d = new Date().toISOString().slice(0, 10);
         sel.forEach((a) => { used.codes[a.code] = d; }); used.rounds = (used.rounds || 0) + 1; saveUsed(used);
-        const H = loadHist(); H.push({ at: new Date().toISOString(), month: monthKey(), n: used.rounds, src: markUsed.src || '', shops: pickShops().map(shopNo), codes: sel.map((a) => ({ code: a.code, name: a.name, nganh: a.nganh || '' })) }); saveHist(H); markUsed.src = '';
-        used.cur = { at: new Date().toISOString(), shops: pickShops().map(shopNo), codes: sel.map((a) => a.code), info: Object.fromEntries(sel.map((a) => [a.code, { name: a.name, nganh: a.nganh || '', unit: a.unit || '' }])) }; saveUsed(used);
+        const H = loadHist(); H.push({ at: new Date().toISOString(), month: monthKey(), n: used.rounds, src: markUsed.src || '', shops: curShops().map(shopNo), codes: sel.map((a) => ({ code: a.code, name: a.name, nganh: a.nganh || '' })) }); saveHist(H); markUsed.src = '';
+        used.cur = { at: new Date().toISOString(), shops: curShops().map(shopNo), codes: sel.map((a) => a.code), info: Object.fromEntries(sel.map((a) => [a.code, { name: a.name, nganh: a.nganh || '', unit: a.unit || '' }])) }; saveUsed(used);
         pick = sel; locked = true; const n = sel.length; renderShops(); render(lastTot[0], Math.max(0, lastTot[1] - n)); $('pickMsg').textContent = 'Đã chốt và lưu ' + n + ' mã vào lịch sử tháng. Lần random sau sẽ không ra lại các mã này.';
       }
       document.querySelectorAll('.pkq').forEach((i) => i.addEventListener('change', () => { try { localStorage.setItem(QKEY, JSON.stringify(quota())); } catch (e) { /* bỏ qua */ } build(locked ? undefined : true); }));
@@ -4721,6 +4722,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const T = { n: it.length, hi: it.filter((x) => x.pl === 'Cao hơn').length, lo: it.filter((x) => x.pl === 'Thấp hơn').length, eq: it.filter((x) => x.pl === 'Bằng giá').length, nr: it.filter(noRsa).length, shops: shops.length, prods: prods.length };
         return { it, shops, prods, T };
       }
+      state.psRender = () => render();
       function render() {
         const D = data(); card.hidden = !D.it.length; if (!D.it.length) return;
         const T = D.T, pc = (a) => (T.n ? Math.round((a / T.n) * 1000) / 10 : 0).toString().replace('.', ',') + '%';
