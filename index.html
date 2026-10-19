@@ -506,7 +506,10 @@ a.btn { text-decoration: none; }
 #pickRndAll[disabled], #pickRndOff[disabled] { opacity: .4; cursor: not-allowed; }
 #pickRndAll[disabled]::before, #pickRndOff[disabled]::before { display: none; }
 .pkshn { font-size: 12.5px; color: var(--ink-2); min-width: 180px; }
-.pkng.pkskip { background: var(--warn-bg); color: var(--warn); }
+.pkbanc { width: 1%; white-space: nowrap; }
+.pkbanb { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 7px; padding: 3px 9px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.pkbanb:hover { color: var(--urgent); border-color: color-mix(in srgb, var(--urgent) 45%, var(--line)); background: var(--urgent-bg); }
+.pkbanb[disabled] { opacity: .35; cursor: not-allowed; }
 .pksh { font-weight: 600; color: var(--accent); white-space: nowrap; }
 .pkshops { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 10px; }
 .pkshop { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--surface); min-width: 0; color: var(--muted); }
@@ -1165,7 +1168,7 @@ function parseSurvey(kind, aoa, defaultShop) {
 /** Đọc file đặt hàng theo form chuẩn của shop (sheet HÀNG THƯỜNG, cột Mã Sản Phẩm / Tên Sản Phẩm / Mã Shop / Tên Shop / Số Lượng Đặt Thêm / Đơn Vị Tính / Ghi Chú).
  *  sheets: [{ name, aoa }]. Chỉ xử lý sheet HÀNG THƯỜNG, sheet CẮT LIỀU được đếm để báo, không đưa vào tính toán. */
 const FORM_COLS = {
-  code: ['mã sản phẩm', 'ma san pham', 'mã hàng'], name: ['tên sản phẩm', 'ten san pham', 'tên hàng'], shopCode: ['mã shop', 'ma shop'], shop: ['tên shop', 'ten shop'],
+  code: ['mã sản phẩm', 'ma san pham', 'mã hàng', 'msp', 'mã sp'], name: ['tên sản phẩm', 'ten san pham', 'tên hàng'], shopCode: ['mã shop', 'ma shop'], shop: ['tên shop', 'ten shop'],
   qty: ['số lượng đặt thêm', 'so luong dat them', 'số lượng đặt', 'sl đặt thêm'], unit: ['đơn vị tính', 'đvt'], note: ['ghi chú'],
 };
 function formHeader(aoa) {
@@ -1187,6 +1190,31 @@ function headlessForm(aoa) {
   }
   return ok >= 2 ? first - 1 : -2;
 }
+/** File gộp nhiều shop (mỗi sheet 1 shop, vd "LC 899", "80829", kèm sheet "Đặt hàng cắt liều" chung):
+ *  tách thành nhiều "file ảo", mỗi shop 1 file như khi shop gửi riêng. Trả null nếu chỉ có 1 shop. aoas: [aoa có .sheetName] */
+function splitOrderBook(aoas, fileName) {
+  const info = [];
+  for (const a of aoas) {
+    const h = formHeader(a); if (h < 0) continue;
+    const head = a[h].map(norm), ci = head.findIndex((c) => FORM_COLS.shopCode.includes(c));
+    const cnt = new Map();
+    if (ci >= 0) for (let i = h + 1; i < a.length; i++) { const v = String((a[i] || [])[ci] == null ? '' : a[i][ci]).trim().replace(/\.0+$/, ''); if (/^\d{4,6}$/.test(v)) cnt.set(v, (cnt.get(v) || 0) + 1); }
+    info.push({ a, h, ci, cnt, cut: /cắt\s*liều/i.test(String(a.sheetName || '')) });
+  }
+  const main = info.filter((x) => !x.cut), codeOfSheet = (x) => [...x.cnt.entries()].sort((p, q) => q[1] - p[1])[0];
+  const shops = new Map();
+  for (const x of main) { const c = codeOfSheet(x); if (!c) continue; if (!shops.has(c[0])) shops.set(c[0], []); shops.get(c[0]).push(x.a); }
+  if (shops.size < 2) return null;
+  // sheet cắt liều chung: tách dòng theo mã shop của từng dòng
+  for (const x of info.filter((y) => y.cut)) {
+    for (const [code, list] of shops) {
+      const rows = x.a.slice(x.h + 1).filter((r) => String((r || [])[x.ci] == null ? '' : r[x.ci]).trim().replace(/\.0+$/, '') === code);
+      if (!rows.length) continue;
+      const sub = x.a.slice(0, x.h + 1).concat(rows); sub.sheetName = x.a.sheetName; list.push(sub);
+    }
+  }
+  return [...shops.entries()].map(([code, list]) => ({ code, name: fileName + ' › ' + list.map((a) => a.sheetName).join(' + '), aoas: list }));
+}
 function parseOrderForm(sheets) {
   const cand = sheets.filter((s) => formHeader(s.aoa) >= 0 || (/hàng\s*thường|cắt\s*liều/i.test(String(s.name || '')) && headlessForm(s.aoa) >= -1));
   if (!cand.length) return null;
@@ -1203,8 +1231,8 @@ function parseOrderForm(sheets) {
       const raw = { code: S(r, 'code').replace(/^'/, ''), name: S(r, 'name'), shopCode: S(r, 'shopCode'), shop: S(r, 'shop'), qty: S(r, 'qty'), unit: S(r, 'unit') };
       const note = S(r, 'note');
       if (norm(raw.name).startsWith('ví dụ') || norm(raw.code).startsWith('ghi chú')) continue;
-      const filled = Object.keys(raw).filter((k) => raw[k] !== '');
-      if (!filled.length) { if (note) noteOnly++; continue; }
+      // dòng chỉ có sẵn mã/tên shop (form điền sẵn shop cho cả sheet) mà chưa có mã, tên, số lượng -> coi là dòng trống
+      if (!raw.code && !raw.name && !raw.qty) { if (note) noteOnly++; continue; }
       all.push({ sheet: s.name, type, line: i + 1, raw: Object.assign({}, raw), note });
       let code = fixCode(raw.code), name = raw.name;
       const qty = numV(raw.qty), unit = capUnit(raw.unit);
@@ -1515,7 +1543,7 @@ function reportMarkdown(rep, lim) {
   return L.join('\n');
 }
 
-if (typeof module !== 'undefined') module.exports = { SV, RDEF, parseSurvey, attachShops, shopResolver, buildReport, reportMarkdown, numV, parseMinutes, codeOf, nameOf, stockFinder, parseOrderForm, FORM_LABEL, parseExpiryKpi, fixCode, fixProd };
+if (typeof module !== 'undefined') module.exports = { SV, RDEF, parseSurvey, attachShops, shopResolver, buildReport, reportMarkdown, numV, parseMinutes, codeOf, nameOf, stockFinder, parseOrderForm, FORM_LABEL, parseExpiryKpi, fixCode, fixProd, splitOrderBook };
 
 /* ===== SECTIONS: File đặt hàng và Cận date ===== */
 const keyOf = (p) => codeOf(p) || nameOf(p);
@@ -2640,7 +2668,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
 
   const PCFG = {
     order: { needStock: true, title: 'File đặt hàng', desc: 'Gộp file đặt hàng của các shop trong khu vực (hàng thường gộp hàng thường, cắt liều gộp cắt liều), cộng thêm các mã Cần xin và XIN GẤP từ tồn kho xoay vòng, loại mã có trong file cận date (mã shop đặt sang sheet riêng, mã hàng thiếu không bổ sung), tách mã có ngày đảm bảo trên 30 ngày sang sheet riêng, rồi xuất đúng form MTR.',
-      slots: [{ k: 'order', label: 'Chọn file đặt hàng của shop', multiple: true, hint: 'Tải được nhiều file một lúc, mỗi shop một file theo form chuẩn có 2 sheet HÀNG THƯỜNG và CẮT LIỀU. Hàng thường trùng mã cùng shop thì lấy dòng số lượng cao nhất, cắt liều trùng mã thì cộng lại. Không tải file nào thì chỉ xuất phần thiếu theo tồn kho.' }],
+      slots: [{ k: 'order', label: 'Chọn file đặt hàng của shop', multiple: true, hint: 'Nhận 2 kiểu: (1) mỗi shop một file theo form chuẩn (sheet HÀNG THƯỜNG và CẮT LIỀU), chọn nhiều file một lúc; (2) một file gộp cả khu vực, mỗi sheet là 1 shop (vd LC 899, 80829…) kèm sheet Đặt hàng cắt liều chung – tool tự tách theo mã shop, sheet của shop ngoài khu vực tự bỏ qua. Hàng thường trùng mã cùng shop thì lấy dòng số lượng cao nhất, cắt liều trùng mã thì cộng lại. Không tải file nào thì chỉ xuất phần thiếu theo tồn kho.' }],
       params: '<div class="wide ordp"><div class="ordphd"><b>Tham số hàng thiếu dùng cho file đặt hàng</b> <span class="note">· chỉ áp dụng cho file đặt hàng, không ảnh hưởng mục Hàng thiếu. Thuộc tính bỏ / không cho hàng lấy theo mục Hàng thiếu.</span></div><div class="ordpgrid"><label>Ngày đảm bảo &lt;<input type="number" id="oNeed" value="30" min="1" step="1"></label><label>Ngày gấp &lt;<input type="number" id="oUrgent" value="7" min="0" step="1"></label><label>Ngày mục tiêu xin<input type="number" id="oTarget" value="30" min="1" step="1"></label><label>Tồn &gt; (shop cho)<input type="number" id="oMinG" value="3" min="0" step="1"></label><label>Ngày đảm bảo &gt; (shop cho)<input type="number" id="oKeepG" value="15" min="0" step="1"></label><label>Số shop tối đa / lần ghép<select id="oMaxG"><option value="1">1</option><option value="2" selected>2</option></select></label></div><div class="actions" style="margin-top:8px"><button class="btn ghost sm" type="button" id="oPCopy">Lấy theo mục Hàng thiếu</button><button class="btn ghost sm" type="button" id="oPReset">Về mặc định</button><span class="note" id="oPNote"></span></div></div><label class="check wide"><input type="checkbox" id="oSub" checked><span>Chỉ đặt phần còn thiếu sau khi đã ghép shop cho nhau<br><span class="note">Bỏ chọn để đặt toàn bộ số lượng thiếu theo tồn kho.</span></span></label><label class="check wide"><input type="checkbox" id="oNear" checked><span>Loại mã có trong file cận date<br><span class="note">Dùng file cận date đã nạp ở mục Cận date: mã nào có trong file (Tính KPI hoặc Không KPI, của bất kỳ shop nào) thì loại khỏi file đặt hàng của tất cả shop. Mã shop đặt chuyển sang sheet Loại do cận date; mã hàng thiếu thì không bổ sung.</span></span></label><label>Ngày đảm bảo > (sang sheet riêng)<input type="number" id="oDays" value="30" min="1" step="1"></label><label>Mốc nhóm thứ hai (ngày)<input type="number" id="oDays2" value="60" min="1" step="1"></label><label>Cảnh báo shop đặt thấp khi dưới (% TB)<input type="number" id="oLow" value="50" min="1" max="100" step="5"></label>',
       heads: ['Shop', 'Sản phẩm', 'Mức', 'SL đề nghị', 'Thiếu theo tồn', 'Shop đặt', 'Ngày đảm bảo', 'Nguồn'], shopFilter: true, top: '<div class="warnline" id="lowWarn" hidden></div>', btn: 'Tải file đặt hàng (Excel)', extra: '<button class="btn ghost" id="bx-order-img" type="button">Xuất báo cáo (hình ảnh)</button>',
       bottom: '<details id="cutWrap" open hidden><summary id="cutSum" style="font-weight:600;cursor:pointer"></summary><div class="tablewrap" style="max-height:300px;margin-top:8px"><table><thead><tr><th>Shop</th><th>Sản phẩm</th><th>ĐVT</th><th class="n">SL</th><th>Ghi chú</th></tr></thead><tbody id="cutBody"></tbody></table></div></details>' +
@@ -2790,6 +2818,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     if (k === 'order') {
       const out = (state.orderFiles || []).map((f) => {
         if (f.err) return { name: f.name, err: f.err };
+        // file gộp nhiều shop: sheet của shop ngoài khu vực (không có trong tồn kho) thì bỏ qua, không báo lỗi
+        if (f.part && state.shops.length && !state.shops.some((x) => shopNo(x) === f.code)) return { name: f.name, outside: true, code: f.code, rows: [], issues: [], fixed: [], sheets: [] };
         const byFile = ''; // chỉ dựa vào nội dung file, không dùng tên file
         const cnt = new Map();
         f.raw.filter((r) => r.type !== 'cut').forEach((r) => { const s = (r.shopCode && rs(String(r.shopCode).trim())) || (r.shop && rs(r.shop)) || ''; if (s) cnt.set(s, (cnt.get(s) || 0) + 1); });
@@ -2807,8 +2837,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       state.surveys.order = good.length ? { rows: good.flatMap((x) => x.rows), unmatched: 0 } : null;
       state.orderIssues = out.flatMap((x) => [...(x.issues || []).map((i) => Object.assign({ file: x.name, status: 'Chưa sửa được, cần shop bổ sung' }, i)), ...(x.fixed || []).map((i) => Object.assign({ file: x.name, status: 'Tool đã tự sửa' }, i))]).sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.sheet < b.sheet ? -1 : a.sheet > b.sheet ? 1 : a.line - b.line));
       const cntT = (x, ty) => x.rows.filter((r) => r.type === ty).length;
-      setSt('order', out.length ? out.map((x) => (x.err ? x.name + ': ' + x.err : x.empty ? x.name + ': ⚠ file trống – đúng form nhưng chưa có dòng đặt hàng nào (shop chưa điền hoặc nộp nhầm file mẫu), bỏ qua' : x.name + ': ' + cntT(x, 'normal') + ' dòng hàng thường, ' + cntT(x, 'cut') + ' dòng cắt liều' + (x.dropped ? ', bỏ ' + x.dropped + ' dòng không đủ thông tin' : '') + (x.unmatched ? ', bỏ ' + x.unmatched + ' dòng không rõ shop' : (x.rows.length ? '' : ', không nhận ra shop: cột Mã Shop / Tên Shop trong file trống hoặc không khớp shop trong tồn kho')))).join('\n') : 'Chưa tải file.',
-        out.some((x) => !x.empty && (x.err || x.unmatched || x.dropped || !x.rows.length)) ? 'bad' : out.length ? 'ok' : '');
+      setSt('order', out.length ? out.map((x) => (x.err ? x.name + ': ' + x.err : x.outside ? x.name + ': shop ' + x.code + ' không thuộc khu vực của bạn (không có trong file tồn kho), bỏ qua' : x.empty ? x.name + ': ⚠ file trống – đúng form nhưng chưa có dòng đặt hàng nào (shop chưa điền hoặc nộp nhầm file mẫu), bỏ qua' : x.name + ': ' + cntT(x, 'normal') + ' dòng hàng thường, ' + cntT(x, 'cut') + ' dòng cắt liều' + (x.dropped ? ', bỏ ' + x.dropped + ' dòng không đủ thông tin' : '') + (x.unmatched ? ', bỏ ' + x.unmatched + ' dòng không rõ shop' : (x.rows.length ? '' : ', không nhận ra shop: cột Mã Shop / Tên Shop trong file trống hoặc không khớp shop trong tồn kho')))).join('\n') : 'Chưa tải file.',
+        out.some((x) => !x.empty && !x.outside && (x.err || x.unmatched || x.dropped || !x.rows.length)) ? 'bad' : out.length ? 'ok' : '');
       { const st = $('st-order'); if (st && out.length) { const lines = st.textContent.split('\n'); st.innerHTML = lines.map((l, i) => '<div class="fline"><span>' + esc(l) + '</span>' + (out[i] ? '<button type="button" class="fx" data-rmf="' + i + '" title="Bỏ riêng file này" aria-label="Bỏ file ' + esc(out[i].name) + '">✕</button>' : '') + '</div>').join('');
         st.querySelectorAll('[data-rmf]').forEach((b) => b.addEventListener('click', () => { const f = out[+b.dataset.rmf]; if (!f) return; const nn = (x) => String(x || '').normalize('NFC').trim().toLowerCase();
           state.orderFiles = (state.orderFiles || []).filter((x) => x.name !== f.name); state.svFiles.order = (state.svFiles.order || []).filter((x) => nn(x.name) !== nn(f.name)); saveSv('order'); reattach('order'); refreshAll(); })); } }
@@ -2954,12 +2984,20 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     try {
       if (k === 'order') {
         const list = []; // mỗi lần chọn file: chỉ tính các file vừa chọn, bỏ danh sách cũ
-        for (const f of files) {
-          const p = parseAny('order', await readAoas(f), '');
-          const m = f.name.match(/(?:LC|shop|SHOP)\s*[-_ ]?\s*(\d{3,6})/i) || f.name.match(/(\d{4,6})/);
-          const nn = (x) => String(x || '').normalize('NFC').trim().toLowerCase(), dup = list.findIndex((x) => nn(x.name) === nn(f.name)); // nạp lại file cùng tên -> thay bản cũ
+        const nn = (x) => String(x || '').normalize('NFC').trim().toLowerCase();
+        const add = (name, size, aoas, code, part) => {
+          const p = parseAny('order', aoas, '');
+          const dup = list.findIndex((x) => nn(x.name) === nn(name)); // nạp lại file cùng tên -> thay bản cũ
           if (dup >= 0) list.splice(dup, 1);
-          list.push(p.error ? { name: f.name, size: f.size, err: p.error } : { name: f.name, size: f.size, raw: p.rows, code: m ? m[1] : '', form: !!p.sheet, sheets: p.sheets || [], issues: p.issues || [], all: p.all || [] });
+          list.push(p.error ? { name, size, err: p.error } : { name, size, part, raw: p.rows, code: code || '', form: !!p.sheet, sheets: p.sheets || [], issues: p.issues || [], all: p.all || [] });
+        };
+        for (const f of files) {
+          const aoas = await readAoas(f);
+          // file gộp nhiều shop (mỗi sheet 1 shop): tách thành từng shop như file riêng
+          const parts = splitOrderBook(aoas, f.name);
+          if (parts) { const old = nn(f.name) + ' › '; for (let i = list.length - 1; i >= 0; i--) if (nn(list[i].name).startsWith(old)) list.splice(i, 1); parts.forEach((x) => add(x.name, 0, x.aoas, x.code, true)); continue; }
+          const m = f.name.match(/(?:LC|shop|SHOP)\s*[-_ ]?\s*(\d{3,6})/i) || f.name.match(/(\d{4,6})/);
+          add(f.name, f.size, aoas, m ? m[1] : '');
         }
         state.orderFiles = list;
       } else {
@@ -4241,13 +4279,11 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const saveUsed = (o) => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { /* trình duyệt chặn bộ nhớ */ } };
       let used = loadUsed(), pick = [], pool = [], mode = 'top', lastTot = [0, 0];
       // số mã từng ngành (chế độ "Chia số mã theo ngành"), nhớ trên trình duyệt
-      const QKEY = 'mtr_price_quota', SKEY = 'mtr_price_shops_off', CKEY = 'mtr_price_skipcnt', BAN_N = 3;
-      // số lần ASM bỏ chọn từng mã (lưu lâu dài, không mất khi sang tháng hay xoá lịch sử tháng). Bỏ đủ BAN_N lần thì loại hẳn khỏi gợi ý.
-      const loadCnt = () => { try { const o = JSON.parse(localStorage.getItem(CKEY) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } };
-      const saveCnt = (o) => { try { localStorage.setItem(CKEY, JSON.stringify(o)); } catch (e) { /* bỏ qua */ } };
-      const cntN = (c) => { const x = loadCnt()[c]; return x ? x.n || 0 : 0; };
-      const banned = (c) => cntN(c) >= BAN_N;
-      let sessSkip = new Set(); // mã đã bị tính 1 lần bỏ trong danh sách đang xem (tick lại thì trả lại)
+      const QKEY = 'mtr_price_quota', SKEY = 'mtr_price_shops_off', BKEY = 'mtr_price_ban';
+      // mã ASM bấm "Loại hẳn": lưu lâu dài, không gợi ý lại dù sang tháng / xoá lịch sử tháng; chỉ hiện lại khi bấm Khôi phục
+      const loadBan = () => { try { const o = JSON.parse(localStorage.getItem(BKEY) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } };
+      const saveBan = (o) => { try { localStorage.setItem(BKEY, JSON.stringify(o)); } catch (e) { /* bỏ qua */ } };
+      const banned = (c) => !!loadBan()[c];
       // shop khảo sát: lưu danh sách shop BỎ chọn (theo mã shop) để shop mới mặc định được chọn
       const shopsOff = () => { try { return new Set(JSON.parse(localStorage.getItem(SKEY) || '[]')); } catch (e) { return new Set(); } };
       const saveShopsOff = (set) => { try { localStorage.setItem(SKEY, JSON.stringify([...set])); } catch (e) { /* bỏ qua */ } };
@@ -4274,15 +4310,15 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         '<div class="ksadd"><input type="text" id="ksIn" placeholder="Dán link (Google Form / Doc / Sheet) hoặc nội dung đã chép cho tool…" spellcheck="false"><button class="btn sm" id="ksAdd" type="button">Lưu</button></div><div id="ksList"></div></div>' +
         '<div id="pickEmpty" class="note" hidden></div>' +
         '<div class="pkref" id="pickRef"></div>' +
-        '<div class="tablewrap" style="max-height:520px"><table><thead><tr><th class="pkchk"><input type="checkbox" id="pickAll" checked aria-label="Chọn tất cả"></th><th class="n">STT</th><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th><th>Shop khảo sát</th><th>Tên shop</th></tr></thead><tbody id="pickBody"></tbody></table></div>' +
+        '<div class="tablewrap" style="max-height:520px"><table><thead><tr><th class="pkchk"><input type="checkbox" id="pickAll" checked aria-label="Chọn tất cả"></th><th class="n">STT</th><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th><th>Shop khảo sát</th><th>Tên shop</th><th></th></tr></thead><tbody id="pickBody"></tbody></table></div>' +
         '<div class="pickfoot"><button class="btn" id="pickSave2" type="button">✔ Chọn danh sách mã này (lưu lịch sử)</button><span class="note" id="pickUsedNote" style="flex:1 1 300px"></span><button class="btn ghost sm danger" id="pickReset" type="button">Xoá lịch sử tháng này</button></div>' +
-        '<details class="optdet" id="pickBan" hidden><summary><span class="chev"></span><b>Mã bị loại hẳn</b> <span class="note" id="pickBanSum"></span></summary><div class="optbody"><div class="actions" style="margin:0 0 8px"><span class="note">Mã bạn bỏ chọn đủ ' + 3 + ' lần sẽ không được gợi ý nữa (kể cả tháng sau). Bấm Khôi phục nếu muốn khảo sát lại.</span><button class="btn ghost sm" id="pickBanAll" type="button">Khôi phục tất cả</button></div><div class="tablewrap" style="max-height:300px"><table><thead><tr><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th><th class="n">Số lần bỏ</th><th></th></tr></thead><tbody id="pickBanBody"></tbody></table></div></div></details>' +
+        '<details class="optdet" id="pickBan" hidden><summary><span class="chev"></span><b>Mã đã loại hẳn</b> <span class="note" id="pickBanSum"></span></summary><div class="optbody"><div class="actions" style="margin:0 0 8px"><span class="note">Mã bạn bấm "⊘ Loại hẳn" sẽ không bao giờ xuất hiện lại trong danh sách, kể cả sang tháng mới hay xoá lịch sử tháng. Bấm Khôi phục nếu muốn khảo sát lại.</span><button class="btn ghost sm" id="pickBanAll" type="button">Khôi phục tất cả</button></div><div class="tablewrap" style="max-height:300px"><table><thead><tr><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th><th>Ngày loại</th><th></th></tr></thead><tbody id="pickBanBody"></tbody></table></div></div></details>' +
         '<details class="optdet pkhist" id="pickHist"><summary><span class="chev"></span><b>Lịch sử các mã đã khảo sát</b> <span class="note" id="pickHistSum"></span></summary><div class="pkhbody"><div class="actions" style="margin:8px 0"><label class="pkf">Xem <select id="pickHistM"></select></label><input type="search" id="pickHistQ" placeholder="Tìm mã / tên…" style="max-width:220px"><button class="btn ghost sm" id="pickHistX" type="button">Tải lịch sử (Excel)</button><button class="btn ghost sm danger" id="pickHistDel" type="button">Xoá toàn bộ lịch sử</button></div><div id="pickHistNg" class="pkref"></div><div class="tablewrap" style="max-height:360px"><table><thead><tr><th>Ngày</th><th class="n">Lần</th><th>Mã sản phẩm</th><th>Tên sản phẩm</th><th>Ngành hàng</th></tr></thead><tbody id="pickHistBody"></tbody></table></div></div></details>';
       grid.before(card);
       try { const q = JSON.parse(localStorage.getItem(QKEY) || 'null'); if (q) document.querySelectorAll('.pkq').forEach((i) => { if (q[i.dataset.ng] != null) i.value = q[i.dataset.ng]; }); } catch (e) { /* bỏ qua */ }
       const fh = grid.querySelector('#card-price .srchead'); if (fh && !fh.querySelector('.stepn')) fh.insertAdjacentHTML('afterbegin', '<span class="stepn">2</span>');
       const n2 = (v) => (Math.round(v * 100) / 100).toLocaleString('vi-VN');
-      let locked = false;
+      let locked = false, allPool = [];
       function build(newList) {
         used = loadUsed();
         if (newList === true && used.cur) { delete used.cur; saveUsed(used); }
@@ -4302,9 +4338,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         $('pickQuota').hidden = !qm; $('pickN').closest('label').style.display = qm ? 'none' : '';
         const all = [...agg.values()].filter((a) => a.sold > 0 && a.shops.size >= minS && a.code && (!ng || qm || a.nganh === ng));
         all.sort((p, q) => (asc ? p.sold - q.sold : q.sold - p.sold) || (p.code < q.code ? -1 : 1));
-        const skip = used.skip || {}; const fresh = all.filter((a) => !used.codes[a.code] && !skip[a.code] && !banned(a.code));
-        sessSkip = new Set();
-        pool = fresh; mode = 'top';
+        const skip = used.skip || {}, B = loadBan(); const fresh = all.filter((a) => !used.codes[a.code] && !skip[a.code] && !B[a.code]);
+        pool = fresh; allPool = all; mode = 'top';
         if (used.cur && used.cur.codes && used.cur.codes.length) {
           // danh sách đã chốt: giữ nguyên để xuất lại Excel / ảnh / Google Form, không đổi mã
           const byCode = new Map([...agg.values()].map((a) => [a.code, a])), info = used.cur.info || {};
@@ -4323,10 +4358,10 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       }
       function render(total, fresh) {
         const asg = assignMap();
-        $('pickBody').innerHTML = pick.map((a, i) => '<tr class="' + (a.on ? '' : 'pkoff') + '"><td class="pkchk"><input type="checkbox" data-pk="' + i + '"' + (a.on ? ' checked' : '') + ' aria-label="Chọn mã ' + esc(a.code) + '"></td><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(a.code) + '</td><td>' + esc(a.name) + (cntN(a.code) ? ' <span class="pkng pkskip" title="Số lần bạn bỏ chọn mã này. Bỏ đủ ' + BAN_N + ' lần thì mã bị loại hẳn">bỏ ' + cntN(a.code) + '/' + BAN_N + '</span>' : '') + '</td><td>' + (a.nganh ? '<span class="pkng">' + esc(a.nganh) + '</span>' : '') + '</td><td class="mono pksh">' + (a.on && asg.has(a.code) ? esc(shopNo(asg.get(a.code))) : '') + '</td><td class="pkshn">' + (a.on && asg.has(a.code) ? esc(shopLabel(asg.get(a.code)).replace(/^LC\s+/, '')) : '') + '</td></tr>').join('');
+        $('pickBody').innerHTML = pick.map((a, i) => '<tr class="' + (a.on ? '' : 'pkoff') + '"><td class="pkchk"><input type="checkbox" data-pk="' + i + '"' + (a.on ? ' checked' : '') + ' aria-label="Chọn mã ' + esc(a.code) + '"></td><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(a.code) + '</td><td>' + esc(a.name) +  + '</td><td>' + (a.nganh ? '<span class="pkng">' + esc(a.nganh) + '</span>' : '') + '</td><td class="mono pksh">' + (a.on && asg.has(a.code) ? esc(shopNo(asg.get(a.code))) : '') + '</td><td class="pkshn">' + (a.on && asg.has(a.code) ? esc(shopLabel(asg.get(a.code)).replace(/^LC\s+/, '')) : '') + '</td><td class="pkbanc"><button type="button" class="pkbanb" data-ban="' + i + '" title="Loại hẳn mã này: không bao giờ gợi ý lại (kể cả tháng sau, xoá lịch sử tháng). Khôi phục ở mục Mã đã loại hẳn."' + (locked ? ' disabled' : '') + '>⊘ Loại hẳn</button></td></tr>').join('');
         const m = used.month.split('-'), nUsed = Object.keys(used.codes).length, nSkip = Object.keys(used.skip || {}).length;
-        $('pickPills').innerHTML = state.rows ? '<span class="pill b">Tháng ' + m[1] + '/' + m[0] + ': đã khảo sát ' + nUsed + ' mã (' + (used.rounds || 0) + ' lần)</span>' + (nSkip ? '<span class="pill w">Đã loại ' + nSkip + ' mã bỏ tick (tháng này)</span>' : '') + (Object.values(loadCnt()).filter((x) => x.n >= BAN_N).length ? '<span class="pill u">Loại hẳn ' + Object.values(loadCnt()).filter((x) => x.n >= BAN_N).length + ' mã (bỏ ' + BAN_N + ' lần)</span>' : '') + '<span class="pill">Còn ' + (fresh || 0).toLocaleString('vi-VN') + ' / ' + (total || 0).toLocaleString('vi-VN') + ' mã chưa khảo sát</span>' : '';
-        $('pickUsedNote').textContent = 'Mã được tính là đã khảo sát khi bạn bấm Chọn danh sách mã này (hoặc tải Excel, xuất ảnh, tạo Google Form). Mã bỏ tick bị loại, không gợi ý lại trong tháng (tick lại trước khi đổi danh sách để giữ). Lịch sử lưu trên trình duyệt này và tự làm mới khi sang tháng.';
+        $('pickPills').innerHTML = state.rows ? '<span class="pill b">Tháng ' + m[1] + '/' + m[0] + ': đã khảo sát ' + nUsed + ' mã (' + (used.rounds || 0) + ' lần)</span>' + (nSkip ? '<span class="pill w">Đã loại ' + nSkip + ' mã bỏ tick (tháng này)</span>' : '') + (Object.keys(loadBan()).length ? '<span class="pill u">Đã loại hẳn ' + Object.keys(loadBan()).length + ' mã</span>' : '') + '<span class="pill">Còn ' + (fresh || 0).toLocaleString('vi-VN') + ' / ' + (total || 0).toLocaleString('vi-VN') + ' mã chưa khảo sát</span>' : '';
+        $('pickUsedNote').textContent = 'Mã được tính là đã khảo sát khi bạn bấm Chọn danh sách mã này (hoặc tải Excel, xuất ảnh, tạo Google Form). Mã bỏ tick không gợi ý lại trong tháng; muốn loại vĩnh viễn thì bấm ⊘ Loại hẳn ở cuối dòng. Lịch sử lưu trên trình duyệt này và tự làm mới khi sang tháng.';
         $('pickReset').hidden = !nUsed && !nSkip;
         lockUi();
         selSync();
@@ -4361,12 +4396,12 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       $('pickShopNone').addEventListener('click', () => setShops(state.shops || [], false));
       state.pickShopsSel = () => curShops();
       function renderBan() {
-        const C = loadCnt(), L = Object.entries(C).filter(([, x]) => (x.n || 0) >= BAN_N);
-        $('pickBan').hidden = !L.length; $('pickBanSum').textContent = '· ' + L.length + ' mã (bỏ chọn từ ' + BAN_N + ' lần)';
-        $('pickBanBody').innerHTML = L.map(([c, x]) => '<tr><td class="mono">' + esc(c) + '</td><td>' + esc(x.name || '') + '</td><td>' + (x.nganh ? '<span class="pkng">' + esc(x.nganh) + '</span>' : '') + '</td><td class="n">' + x.n + '</td><td><button class="btn ghost sm" type="button" data-unban="' + esc(c) + '">Khôi phục</button></td></tr>').join('');
+        const L = Object.entries(loadBan()); const dd = (x) => (x ? x.split('-').reverse().join('/') : '');
+        $('pickBan').hidden = !L.length; $('pickBanSum').textContent = '· ' + L.length + ' mã';
+        $('pickBanBody').innerHTML = L.map(([c, x]) => '<tr><td class="mono">' + esc(c) + '</td><td>' + esc(x.name || '') + '</td><td>' + (x.nganh ? '<span class="pkng">' + esc(x.nganh) + '</span>' : '') + '</td><td>' + dd(x.at) + '</td><td><button class="btn ghost sm" type="button" data-unban="' + esc(c) + '">Khôi phục</button></td></tr>').join('');
       }
-      $('pickBanBody').addEventListener('click', (e) => { const b = e.target.closest('[data-unban]'); if (!b) return; const C = loadCnt(); delete C[b.dataset.unban]; saveCnt(C); renderBan(); render(lastTot[0], lastTot[1]); $('pickMsg').textContent = 'Đã khôi phục mã ' + b.dataset.unban + '. Mã sẽ được gợi ý lại ở danh sách mới.'; });
-      $('pickBanAll').addEventListener('click', () => { const C = loadCnt(); Object.keys(C).forEach((k) => { if (C[k].n >= BAN_N) delete C[k]; }); saveCnt(C); renderBan(); render(lastTot[0], lastTot[1]); $('pickMsg').textContent = 'Đã khôi phục tất cả mã bị loại hẳn.'; });
+      $('pickBanBody').addEventListener('click', (e) => { const b = e.target.closest('[data-unban]'); if (!b) return; const B = loadBan(); delete B[b.dataset.unban]; saveBan(B); renderBan(); render(lastTot[0], lastTot[1]); $('pickMsg').textContent = 'Đã khôi phục mã ' + b.dataset.unban + '. Mã sẽ được gợi ý lại ở danh sách mới.'; });
+      $('pickBanAll').addEventListener('click', () => { saveBan({}); renderBan(); render(lastTot[0], lastTot[1]); $('pickMsg').textContent = 'Đã khôi phục tất cả mã bị loại hẳn.'; });
       function lockUi() {
         const box = $('pickLock'); box.hidden = !state.rows || !pick.length; box.classList.toggle('on', locked);
         const at = used.cur && used.cur.at ? new Date(used.cur.at) : null, p = (n) => String(n).padStart(2, '0');
@@ -4420,18 +4455,17 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const sortPick = () => { const asc = $('pickOrd').value === 'asc', qm = qMode(); pick.sort((p, q) => (p.on === q.on ? 0 : p.on ? -1 : 1) || (qm ? PK_NG.indexOf(p.nganh) - PK_NG.indexOf(q.nganh) : 0) || (asc ? p.sold - q.sold : q.sold - p.sold)); };
       function randomize(keepOn) {
         used = loadUsed();
-        const okc = (a) => !used.codes[a.code] && !(used.skip || {})[a.code] && !banned(a.code);
-        pool = pool.filter(okc);
+        const B = loadBan(), okc = (a) => !used.codes[a.code] && !(used.skip || {})[a.code] && !B[a.code];
+        pool = (allPool.length ? allPool : pool).filter(okc);
         if (!pool.length) { $('pickMsg').textContent = 'Không còn mã nào chưa khảo sát / chưa bỏ để random. Giảm "Ít nhất … shop có bán" hoặc xoá lịch sử tháng.'; return; }
-        if (!keepOn) sessSkip = new Set();
         const K = Math.max(10, parseInt($('pickPool').value, 10) || 100), keep = keepOn ? pick.filter((a) => a.on) : [];
-        const N = keepOn ? pick.length : qMode() ? PK_NG.reduce((x, n) => x + quota()[n], 0) : Math.max(1, Math.min(100, parseInt($('pickN').value, 10) || 20));
+        const N = qMode() && keepOn ? PK_NG.reduce((x, n) => x + quota()[n], 0) : keepOn ? pick.length : qMode() ? PK_NG.reduce((x, n) => x + quota()[n], 0) : Math.max(1, Math.min(100, parseInt($('pickN').value, 10) || 20));
         const excl = new Set((keepOn ? pick : []).map((a) => a.code));
         let add = [];
         if (qMode()) {
           // giữ đúng số mã từng ngành: random trong top K của từng ngành
           const q = quota();
-          PK_NG.forEach((n) => { const need = (keepOn ? pick.filter((a) => a.nganh === n).length : q[n]) - keep.filter((a) => a.nganh === n).length; add = add.concat(shuffle(pool.filter((a) => a.nganh === n).slice(0, K).filter((a) => !excl.has(a.code))).slice(0, Math.max(0, need))); });
+          PK_NG.forEach((n) => { const need = q[n] - keep.filter((a) => a.nganh === n).length; add = add.concat(shuffle(pool.filter((a) => a.nganh === n).slice(0, K).filter((a) => !excl.has(a.code))).slice(0, Math.max(0, need))); });
           add.forEach((a) => (a.on = true));
         } else {
           const cand = shuffle(pool.slice(0, K).filter((a) => !excl.has(a.code)));
@@ -4446,14 +4480,15 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       $('pickRndOff').addEventListener('click', () => { if (locked) { build(true); randomize(false); return; } if (!chosen().length || chosen().length < pick.length) randomize(true); else $('pickMsg').textContent = 'Bỏ tick các mã không cần khảo sát trước, rồi bấm để thay bằng mã random.'; });
       $('pickTop').addEventListener('click', () => { $('pickMsg').textContent = ''; build(true); });
       // mã bỏ tick: ghi vào danh sách loại của tháng (không gợi ý lại); tick lại thì bỏ khỏi danh sách loại
-      function setSkip(list, off) {
-        used = loadUsed(); used.skip = used.skip || {}; const d = new Date().toISOString().slice(0, 10), C = loadCnt();
-        list.forEach((a) => {
-          if (off) { used.skip[a.code] = d; if (!sessSkip.has(a.code)) { sessSkip.add(a.code); C[a.code] = { n: ((C[a.code] && C[a.code].n) || 0) + 1, name: a.name, nganh: a.nganh || '', at: d }; } }
-          else { delete used.skip[a.code]; if (sessSkip.has(a.code)) { sessSkip.delete(a.code); const n = ((C[a.code] && C[a.code].n) || 1) - 1; if (n > 0) C[a.code].n = n; else delete C[a.code]; } }
-        });
-        saveUsed(used); saveCnt(C); renderBan();
-      }
+      function setSkip(list, off) { used = loadUsed(); used.skip = used.skip || {}; const d = new Date().toISOString().slice(0, 10); list.forEach((a) => { if (off) used.skip[a.code] = d; else delete used.skip[a.code]; }); saveUsed(used); }
+      $('pickBody').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-ban]'); if (!b || locked) return;
+        const a = pick[+b.dataset.ban]; if (!a) return;
+        const B = loadBan(); B[a.code] = { name: a.name, nganh: a.nganh || '', at: new Date().toISOString().slice(0, 10) }; saveBan(B);
+        if (a.on) lastTot[1] -= 1; pick.splice(+b.dataset.ban, 1); pool = pool.filter((x) => x.code !== a.code);
+        renderBan(); render(lastTot[0], lastTot[1]);
+        $('pickMsg').textContent = 'Đã loại hẳn mã ' + a.code + '. Bấm "Random thay mã bỏ chọn" để bù mã khác, hoặc khôi phục ở mục Mã đã loại hẳn.';
+      });
       $('pickBody').addEventListener('change', (e) => { const c = e.target.closest('[data-pk]'); if (!c) return; const a = pick[+c.dataset.pk]; a.on = c.checked; setSkip([a], !a.on); c.closest('tr').classList.toggle('pkoff', !a.on); lastTot[1] += a.on ? 1 : -1; render(lastTot[0], lastTot[1]); });
       $('pickAll').addEventListener('change', () => { const v = $('pickAll').checked, ch = pick.filter((a) => a.on !== v); pick.forEach((a) => (a.on = v)); setSkip(ch, !v); lastTot[1] += v ? ch.length : -ch.length; render(lastTot[0], lastTot[1]); });
       function markUsed() {
