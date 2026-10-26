@@ -512,6 +512,7 @@ a.btn { text-decoration: none; }
 .pkbanb[disabled] { opacity: .35; cursor: not-allowed; }
 table.pknoshop th:nth-child(6), table.pknoshop th:nth-child(7), table.pknoshop td.pksh, table.pknoshop td.pkshn { display: none; }
 .pksh { font-weight: 600; color: var(--accent); white-space: nowrap; }
+#bx-expiry { display: none !important; } /* bỏ nút Tải báo cáo cận date (Excel): chỉ giữ Danh sách KPI theo shop + Xuất báo cáo */
 .pkshops { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 10px; }
 .pkshop { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--surface); min-width: 0; color: var(--muted); }
 .pkshop.on { color: var(--ink); border-color: var(--accent-line); background: var(--accent-soft); }
@@ -4074,7 +4075,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
           '## 1. Danh sách cận date (Tính KPI)',
           'Xem tiến độ KPI theo shop: mục tiêu clear &gt; 80% giá trị trong tháng, mức cần đạt tới hôm nay tính theo số ngày đã qua.',
           'Bấm <b>Danh sách KPI theo shop (Excel)</b> (mỗi shop 1 sheet) để gửi shop; <b>Xuất báo cáo (hình ảnh)</b> → xem trước → gửi nhóm.',
-          'Xem <b>gợi ý chuyển lô cận date</b> sang shop bán nhanh hơn (đã trừ phần shop tự bán kịp); mở <b>Tham số gợi ý chuyển</b> nếu cần. Bấm <b>Tải báo cáo cận date (Excel)</b>.',
+          'Xem <b>gợi ý chuyển lô cận date</b> sang shop bán nhanh hơn (đã trừ phần shop tự bán kịp); mở <b>Tham số gợi ý chuyển</b> nếu cần. Bấm <b>Danh sách KPI theo shop (Excel)</b> hoặc <b>Xuất báo cáo (hình ảnh)</b> để gửi shop.',
           '## 2. Điều phối cận khó bán',
           'Xem các lô Tính KPI tồn &gt; 1 không có sức bán và shop đề xuất nhận (ưu tiên cùng tỉnh, tồn &gt; 2 chia cho 2 shop).',
           'Bấm <b>Tải cả khu vực (Excel)</b> cho ASM, hoặc <b>Tải theo từng shop (ZIP)</b> – mỗi shop 1 file Chuyển đi / Nhận về / Chưa có shop nhận.'],
