@@ -683,6 +683,7 @@ th.sortable.asc, th.sortable.desc { color: var(--accent); }
       <button type="button" data-tab="price" data-grp="Khảo sát" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12 12 20l-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Khảo sát giá đối thủ</span></button>
       <button type="button" data-tab="toa" data-grp="Khảo sát" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18H7z"/><path d="M10 8h4M10 12h4M10 16h2"/></svg><span>Khảo sát toa</span></button>
       <div class="navgrp">Tổng hợp</div>
+      <button type="button" data-tab="team" data-grp="Tổng hợp" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3.3 2.7-5 6-5s6 1.7 6 5M14.5 14.2c.8-.3 1.6-.4 2.5-.4 2.5 0 4 1.3 4 4"/></svg><span>Team Hàng Hoá</span></button>
       <button type="button" data-tab="report" data-grp="Tổng hợp" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Báo cáo tổng hợp</span></button>
     </nav>
     <div class="sidefoot">
@@ -799,6 +800,7 @@ th.sortable.asc, th.sortable.desc { color: var(--accent); }
     <section class="tp" id="tp-newsku"></section>
     <section class="tp" id="tp-price"></section>
     <section class="tp" id="tp-toa"></section>
+    <section class="tp" id="tp-team"></section>
     <section class="tp" id="tp-report">
       <div class="panel"><h2>Báo cáo tổng hợp</h2><p class="note" style="margin:0 0 10px;max-width:80ch">Gom kết quả các mục đã tải thành báo cáo 3 phần theo mẫu: Quyết định điều phối, Báo cáo theo shop, Cảnh báo vi phạm. Tình trạng đúng giờ, trễ hạn, chưa nộp tính từ các file khảo sát đã tải.</p><div class="params"><label>Hạn nộp báo cáo (giờ:phút)<input type="text" id="rDeadline" placeholder="vd 11:00" maxlength="5"></label></div></div>
     <div id="repSec" style="display:flex;flex-direction:column;gap:12px">
@@ -2681,7 +2683,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
 
   /* ===================== các tab xử lý riêng ===================== */
   let curTab = 'alloc', rt = null;
-  const TABS = ['alloc', 'order', 'expiry', 'newsku', 'price', 'toa', 'report'];
+  const TABS = ['alloc', 'order', 'expiry', 'newsku', 'price', 'toa', 'team', 'report'];
   const KINDS = ['price', 'toa', 'newsku', 'order', 'expiry', 'kpi'];
   const fileInput = (k, label, multiple, hint) =>
     '<div class="slotrow"><label class="btn sm">' + label + '<input type="file" hidden accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt" data-k="' + k + '"' + (multiple ? ' multiple' : '') + '></label>' +
@@ -3352,10 +3354,17 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
 
   /* ---------- File đặt hàng: điền vào đúng file form MTR gốc ---------- */
   const b64buf = (b64) => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; };
-  function fillForm(ws, rows) {
+  function fillForm(ws, rows, asmCol) {
     const FIRST = 3, last = ws.rowCount;
     const tplRow = ws.getRow(FIRST);
+    let asmSt = null;
+    if (asmCol) { // cột bổ sung ASM (cột I, sau cột check mã của form) – không chèn giữa để giữ công thức gốc
+      const h = ws.getRow(1).getCell(9); h.value = 'ASM'; h.style = JSON.parse(JSON.stringify(ws.getRow(1).getCell(7).style || {}));
+      const n = ws.getRow(2).getCell(9); n.value = 'ASM quản lý shop\n(dò theo file chia shop)'; n.style = JSON.parse(JSON.stringify(ws.getRow(2).getCell(8).style || {}));
+      ws.getColumn(9).width = 32; asmSt = JSON.stringify(tplRow.getCell(7).style || {});
+    }
     rows.forEach((it, i) => {
+      if (asmCol) { const c = ws.getRow(FIRST + i).getCell(9); c.style = JSON.parse(asmSt); c.value = it.asm || ''; }
       const rn = FIRST + i, row = ws.getRow(rn);
       if (rn > last) { for (let c = 1; c <= 8; c++) row.getCell(c).style = JSON.parse(JSON.stringify(tplRow.getCell(c).style || {})); row.getCell(8).value = { formula: 'IF(A' + rn + '="","",IF(OR(LEN(A' + rn + ')=8, LEN(A' + rn + ')=13),"OK","Bạn kiểm tra lại nhé mã sản phẩm không phải 8 hoặc 13 ký tự"))' }; }
       row.getCell(1).value = String(it.code || '');
@@ -3374,6 +3383,221 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     rows.forEach((r) => { const o = {}; cols.forEach((c) => { const v = r[c[1]]; o[c[1]] = typeof v === 'number' && !isFinite(v) ? '' : v; }); ws.addRow(o); });
     styleHead(ws);
   }
+  /* =================== TEAM HÀNG HOÁ: gộp file đặt hàng của tất cả ASM toàn miền =================== */
+  (function () {
+    const T = { files: [], merged: null };
+    const tp = $('tp-team'); if (!tp) return;
+    tp.innerHTML =
+      '<div class="srccard" id="teamAsmCard" style="margin-bottom:12px"><div class="srchead"><span class="sico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 19c0-3.3 2.7-5 6-5s6 1.7 6 5M16 11h5M18.5 8.5v5"/></svg></span><div class="stt"><b>File chia shop ASM</b><span>File Mtr_Chia_shop theo tháng (sheet DS shop: Mã cửa hàng, Tên cửa hàng, cột ASM) · dùng để thêm cột ASM vào file xuất</span></div><span class="badge off" id="teamAsmBadge">Chưa có file</span></div>' +
+      '<div class="srcbody"><div class="slotrow" style="align-items:center;gap:8px;flex-wrap:wrap"><label class="btn ghost">Chọn file chia shop<input type="file" id="teamAsmIn" hidden accept=".xlsx,.xls,.xlsm,.csv"></label><button class="btn ghost danger" id="teamAsmReset" type="button" hidden>Bỏ file</button><span class="note" id="teamAsmLine" style="flex:1 1 260px"></span></div></div></div>' +
+      '<div class="srccard" id="teamCard"><div class="srchead"><span class="sico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span><div class="stt"><b>File đặt hàng của các ASM</b><span>Form MTR (sheet HÀNG THƯỜNG + CẮT LIỀU) · chọn nhiều file một lúc · không cần file tồn kho</span></div><span class="badge off" id="teamBadge">Chưa có file</span></div>' +
+      '<div class="srcbody" id="teamDrop" style="align-items:center;text-align:center;border:1.5px dashed var(--accent-line);border-radius:11px;padding:18px 14px">' +
+      '<span class="note">Kéo thả các file vào đây, hoặc</span><div class="slotrow" style="justify-content:center"><label class="btn">Chọn file đặt hàng (nhiều file)<input type="file" id="teamIn" hidden multiple accept=".xlsx,.xls,.xlsm"></label><button class="btn ghost danger" id="teamClear" type="button" hidden>Xoá tất cả</button></div>' +
+      '<div class="st" id="teamSt" style="text-align:left;width:100%"></div></div>' +
+      '</div>' +
+      '<div class="stats" id="teamStats"></div>' +
+      '<div class="warnline" id="teamWarn" hidden></div>' +
+      '<div class="panel rescard" id="teamAsmRes" hidden><div class="cardhead"><div><h3>Báo cáo kết quả theo ASM</h3><span class="note" id="teamAsmNote"></span></div>' +
+      '<div class="actions"><span class="msg" id="teamAsmMsg" role="status"></span><button class="btn ghost" id="teamAsmImg" type="button">Xuất báo cáo (hình ảnh)</button></div></div>' +
+      '<div class="tablewrap" style="max-height:520px"><table><thead><tr><th class="n" style="width:56px">STT</th><th style="min-width:260px">ASM</th><th class="n">Shop đặt hàng</th><th class="n">Số mã hàng thường</th><th class="n">Số mã cắt liều</th><th class="n">Tổng số mã</th><th class="n">Tổng SL đặt</th><th>Ghi chú</th></tr></thead><tbody id="teamAsmBody"></tbody><tfoot id="teamAsmFoot"></tfoot></table></div></div>' +
+      '<div class="panel rescard" id="teamRes" hidden><div class="cardhead"><div><h3>Tổng hợp theo file ASM</h3><span class="note">Hàng thường gộp hàng thường, cắt liều gộp cắt liều. Cùng shop + cùng mã: hàng thường lấy dòng số lượng cao nhất, cắt liều cộng lại.</span></div>' +
+      '<div class="actions"><span class="msg" id="teamMsg" role="status"></span><button class="btn" id="teamXls" type="button">Tải file gộp toàn miền (Excel)</button></div></div>' +
+      '<div class="tablewrap" style="max-height:420px"><table><thead><tr><th>File</th><th>ASM</th><th class="n">Số shop</th><th class="n">Dòng hàng thường</th><th class="n">Dòng cắt liều</th><th class="n">Tổng SL</th><th>Ghi chú</th></tr></thead><tbody id="teamBody"></tbody></table></div>' +
+      '<details class="optdet" id="teamDropW" hidden><summary><span class="chev"></span><b>Dòng bị bỏ / tool đã sửa</b> <span class="note" id="teamDropSum"></span></summary><div class="optbody"><div class="tablewrap" style="max-height:300px"><table><thead><tr><th>File</th><th>Sheet · dòng</th><th>Nội dung</th><th>Sản phẩm</th></tr></thead><tbody id="teamDropBody"></tbody></table></div></div></details></div>';
+    /* ---- Dò ASM theo mã shop / tên shop từ file chia shop người dùng nạp (đổi theo tháng, nhớ lại trong trình duyệt) ---- */
+    const AK = 'mtr_team_asm';
+    const codeKey = (v) => { const d = String(v == null ? '' : v).replace(/\.0+$/, '').replace(/\D/g, '').replace(/^0+/, ''); return d.length >= 3 ? d : ''; };
+    const nameKey = (v) => norm(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '');
+    const nameKey2 = (v) => nameKey(String(v || '').replace(/^\s*(asm\s*\d+\s+)?(nhà mới\s+)?(lc|vx|hope|fpt long châu)\s+/i, ''));
+    let ASM = null;
+    function asmBuild(src) {
+      const byCode = new Map(), byName = new Map(), byName2 = new Map();
+      (src.rows || []).forEach(([c, n, a]) => { if (!a) return; const k = codeKey(c); if (k && !byCode.has(k)) byCode.set(k, a); const k1 = nameKey(n), k2 = nameKey2(n); if (k1 && !byName.has(k1)) byName.set(k1, a); if (k2 && !byName2.has(k2)) byName2.set(k2, a); });
+      const shopsOf = new Map(); (src.rows || []).forEach(([, , a]) => { if (a) shopsOf.set(a, (shopsOf.get(a) || 0) + 1); });
+      ASM = { src: src.src, at: src.at || '', shopsOf, n: (src.rows || []).length, asmN: new Set((src.rows || []).map((r) => r[2])).size, byCode, byName, byName2 };
+    }
+    const asmOf = (code, name) => (ASM && (ASM.byCode.get(codeKey(code)) || ASM.byName.get(nameKey(name)) || ASM.byName2.get(nameKey2(name)))) || '';
+    function asmInit() { let u = null; try { u = JSON.parse(localStorage.getItem(AK) || 'null'); } catch (e) { u = null; } if (u && u.rows && u.rows.length) asmBuild(u); else ASM = null; }
+    function asmLine() {
+      const on = !!(ASM && ASM.n); $('teamAsmBadge').textContent = on ? ASM.n + ' shop' : 'Chưa có file'; $('teamAsmBadge').className = 'badge ' + (on ? 'ok' : 'off');
+      $('teamAsmLine').innerHTML = on ? 'Đang dùng: <b>' + esc(ASM.src) + '</b> · ' + ASM.n + ' shop, ' + ASM.asmN + ' ASM' + (ASM.at ? ' · nạp ngày ' + esc(ASM.at) : '') + '. Sang tháng mới chọn lại file mới.' : 'Chưa có file – cột ASM trong file xuất sẽ để trống.';
+      $('teamAsmReset').hidden = !on; }
+    /** Đọc file chia shop: sheet có cột Mã cửa hàng / Tên cửa hàng + cột ASM (ưu tiên cột ASM mới nhất, vd "Tên nhân viên ASM từ 01/10/2026"). */
+    function parseAsmBook(aoas) {
+      let best = null;
+      aoas.forEach((a) => {
+        for (let h = 0; h < Math.min(12, a.length); h++) {
+          const head = (a[h] || []).map(norm);
+          const iC = head.findIndex((c) => /^mã\s*(cửa hàng|shop|ch|cửa hiệu)\b/.test(c) || c === 'mã shop' || c === 'shop');
+          const iN = head.findIndex((c) => /^tên\s*(cửa hàng|shop|ch)\b/.test(c));
+          const asmCols = head.map((c, i) => [c, i]).filter(([c]) => /\basm\b/.test(c) && !/^mã/.test(c) && !/level/.test(c));
+          if ((iC < 0 && iN < 0) || !asmCols.length) continue;
+          const pick = (asmCols.filter(([c]) => /\btừ\b/.test(c)).pop() || asmCols[asmCols.length - 1])[1];
+          const rows = [];
+          for (let i = h + 1; i < a.length; i++) { const r = a[i] || [], c = iC >= 0 ? String(r[iC] == null ? '' : r[iC]).trim() : '', n = iN >= 0 ? String(r[iN] == null ? '' : r[iN]).trim() : '', v = String(r[pick] == null ? '' : r[pick]).trim(); if ((c || n) && v) rows.push([c, n, v]); }
+          if (!best || rows.length > best.length) best = rows;
+          break;
+        }
+      });
+      return best;
+    }
+    asmInit();
+    const NOASM = '(chưa dò được ASM)';
+    /** Bảng kết quả theo ASM: số mã (dòng mã × shop) hàng thường / cắt liều, tổng SL; ASM có trong file chia shop mà chưa có đơn cũng hiện ra. */
+    function asmReport(M) {
+      const by = new Map(), get = (a) => { if (!by.has(a)) by.set(a, { a, sh: new Set(), n: 0, c: 0, q: 0 }); return by.get(a); };
+      [['n', M.normal], ['c', M.cut]].forEach(([t, L]) => L.forEach((r) => { const e = get(r.asm || NOASM); e[t]++; e.q += r.qty; e.sh.add(r.shopCode || r.shop); }));
+      if (ASM) ASM.shopsOf.forEach((_, a) => get(a));
+      const rows = [...by.values()].map((e) => {
+        const tot = ASM && ASM.shopsOf.get(e.a) || 0, sh = e.sh.size;
+        const note = e.a === NOASM ? 'Shop không có trong file chia shop' : !(e.n + e.c) ? 'Chưa có đơn' : tot && sh < tot ? (tot - sh) + ' shop chưa đặt' : '';
+        return { a: e.a, sh, tot, n: e.n, c: e.c, q: e.q, note, lvl: e.a === NOASM ? 'w' : !(e.n + e.c) ? 'u' : '' };
+      });
+      rows.sort((x, y) => (x.a === NOASM) - (y.a === NOASM) || (!(x.n + x.c)) - (!(y.n + y.c)) || (x.a < y.a ? -1 : x.a > y.a ? 1 : 0));
+      const sum = (k) => rows.reduce((s, r) => s + r[k], 0);
+      return { rows, n: sum('n'), c: sum('c'), q: sum('q'), sh: sum('sh'), tot: sum('tot'), none: rows.filter((r) => r.lvl === 'u').length };
+    }
+    const sheetType = (n) => (/cắt\s*liều/i.test(n) ? 'cut' : /hàng\s*thường/i.test(n) ? 'normal' : '');
+    /** Đọc 1 file ASM: chỉ lấy sheet HÀNG THƯỜNG / CẮT LIỀU (bỏ các sheet phụ như Ngày đảm bảo, Loại...). */
+    function parseTeamFile(name, aoas) {
+      let use = aoas.filter((a) => sheetType(String(a.sheetName || '')) && formHeader(a) >= 0);
+      if (!use.length) use = aoas.filter((a) => formHeader(a) >= 0).slice(0, 1); // file không đặt tên sheet chuẩn: lấy sheet form đầu tiên là hàng thường
+      if (!use.length) return { name, err: 'Không thấy sheet đúng form (cột Mã Sản Phẩm, Tên Sản Phẩm, Số Lượng Đặt Thêm)' };
+      const rows = [], notes = [];
+      use.forEach((a) => {
+        const h = formHeader(a), head = a[h].map(norm), idx = {}, type = sheetType(String(a.sheetName || '')) || 'normal';
+        for (const k in FORM_COLS) idx[k] = head.findIndex((c) => FORM_COLS[k].includes(c));
+        const S = (r, k) => (idx[k] >= 0 && r[idx[k]] != null ? String(r[idx[k]]).trim() : '');
+        for (let i = h + 1; i < a.length; i++) {
+          const r = a[i] || []; let code = fixCode(S(r, 'code')), pname = S(r, 'name');
+          const m = pname.match(/^\s*([A-Za-z]{0,2}\d{5,})\s*-\s*(.*)$/); if (m) { if (!code) code = fixCode(m[1]); pname = m[2].trim(); }
+          const sc = S(r, 'shopCode').replace(/\.0+$/, ''), sn = S(r, 'shop'); let qty = numV(S(r, 'qty'));
+          if (!code && !pname && !(qty > 0)) continue;
+          if (norm(pname).startsWith('ví dụ') || norm(S(r, 'code')).startsWith('ghi chú')) continue;
+          const at = a.sheetName + ' · dòng ' + (i + 1), prod = (code ? code + ' - ' : '') + pname;
+          if (!code && pname) { const c2 = catCodeByName(pname); if (c2) { code = c2; notes.push({ at, text: 'Thiếu mã, lấy theo tên trong danh mục: ' + c2, prod, ok: true }); } }
+          if (!code) { notes.push({ at, text: 'Bỏ: thiếu mã sản phẩm', prod: prod || '(trống)' }); continue; }
+          if (!sc && !sn) { notes.push({ at, text: 'Bỏ: thiếu mã shop và tên shop', prod }); continue; }
+          if (!pname) { pname = catName(code); if (pname) notes.push({ at, text: 'Thiếu tên, lấy theo danh mục', prod: code + ' - ' + pname, ok: true }); }
+          if (!(qty > 0)) { notes.push({ at, text: 'Thiếu số lượng, điền 1', prod, ok: true }); qty = 1; }
+          rows.push({ code, name: pname, shopCode: sc, shop: sn, qty: Math.ceil(qty - 1e-9), unit: capUnit(S(r, 'unit')), note: S(r, 'note'), type, file: name });
+        }
+      });
+      return { name, rows, notes };
+    }
+    function merge() {
+      const N = new Map(), C = new Map(), shopFiles = new Map(); let dupN = 0;
+      T.files.filter((f) => !f.err).forEach((f) => {
+        f.rows.forEach((r) => {
+          const shopKey = r.shopCode || norm(r.shop); if (!shopFiles.has(shopKey)) shopFiles.set(shopKey, new Set()); shopFiles.get(shopKey).add(f.name);
+          const k = shopKey + '\u0000' + r.code, M = r.type === 'cut' ? C : N, o = M.get(k);
+          if (!o) { M.set(k, Object.assign({}, r)); return; }
+          if (r.type === 'cut') o.qty += r.qty; else { dupN++; if (r.qty > o.qty) Object.assign(o, r); }
+          if (!o.shop && r.shop) o.shop = r.shop; if (!o.name && r.name) o.name = r.name; if (!o.unit && r.unit) o.unit = r.unit;
+        });
+      });
+      const multi = [...shopFiles.entries()].filter(([, s]) => s.size > 1);
+      const sortF = (a, b) => (a.shopCode < b.shopCode ? -1 : a.shopCode > b.shopCode ? 1 : a.code < b.code ? -1 : 1);
+      T.merged = { normal: [...N.values()].sort(sortF), cut: [...C.values()].sort(sortF), shops: shopFiles.size, multi, dupN };
+    }
+    const fmt = (n) => Number(n || 0).toLocaleString('vi-VN');
+    function render() {
+      const ok = T.files.filter((f) => !f.err);
+      $('teamBadge').textContent = T.files.length ? T.files.length + ' file' : 'Chưa có file'; $('teamBadge').className = 'badge ' + (T.files.length ? 'ok' : 'off');
+      $('teamClear').hidden = !T.files.length;
+      $('teamSt').innerHTML = T.files.map((f, i) => '<div class="fline"><span>' + esc(f.name) + ': ' + (f.err ? '⚠ ' + esc(f.err) : !f.rows.length ? '⚠ file trống – đúng form nhưng chưa có dòng đặt hàng nào' : fmt(f.rows.filter((r) => r.type !== 'cut').length) + ' dòng hàng thường, ' + fmt(f.rows.filter((r) => r.type === 'cut').length) + ' dòng cắt liều') + '</span><button type="button" class="fx" data-trm="' + i + '" title="Bỏ file này">✕</button></div>').join('');
+      if (!ok.length) { $('teamAsmRes').hidden = true; T.merged = null; $('teamStats').innerHTML = ''; $('teamRes').hidden = true; $('teamWarn').hidden = true; return; }
+      merge(); const M = T.merged, sumQ = (L) => L.reduce((a, r) => a + r.qty, 0);
+      const noAsm = new Map(), cache = new Map();
+      [M.normal, M.cut].forEach((L) => L.forEach((r) => { const k = r.shopCode + '\u0000' + r.shop; if (!cache.has(k)) cache.set(k, asmOf(r.shopCode, r.shop)); r.asm = cache.get(k); if (!r.asm) noAsm.set(r.shopCode || r.shop, r.shop); }));
+      M.noAsm = noAsm;
+      $('teamStats').innerHTML = stat(ok.length, 'file ASM') + stat(fmt(M.shops), 'shop') + stat(fmt(M.normal.length), 'dòng hàng thường') + stat(fmt(M.cut.length), 'dòng cắt liều') + stat(fmt(sumQ(M.normal) + sumQ(M.cut)), 'tổng SL đặt');
+      const w = []; if (M.multi.length) w.push('<b>' + M.multi.length + ' shop có trong nhiều file</b> (có thể 2 ASM cùng gửi, hoặc nạp trùng file): ' + M.multi.slice(0, 12).map(([s, fs]) => esc(s) + ' (' + [...fs].length + ' file)').join(', ') + (M.multi.length > 12 ? '…' : '') + '. Hàng thường trùng mã đã lấy dòng SL cao nhất, cắt liều đã cộng lại.');
+      if (!ASM) w.push('<b>Chưa nạp file chia shop ASM</b> – cột ASM trong file xuất sẽ để trống. Chọn file Mtr_Chia_shop tháng này ở ô phía trên.');
+      else if (noAsm.size) w.push('<b>' + noAsm.size + ' shop chưa dò được ASM</b> (không có trong file chia shop' + (ASM && ASM.src ? ' ' + esc(ASM.src) : '') + ', cột ASM để trống): ' + [...noAsm.entries()].slice(0, 12).map(([c, n]) => esc(c + (n && n !== c ? ' ' + n : ''))).join(', ') + (noAsm.size > 12 ? '…' : '') + '. Nạp file chia shop mới hơn nếu có.');
+      const bad = T.files.filter((f) => f.err); if (bad.length) w.push('<b>' + bad.length + ' file không đọc được</b>: ' + bad.map((f) => esc(f.name)).join(', '));
+      $('teamWarn').hidden = !w.length; $('teamWarn').innerHTML = w.join('<br>');
+      $('teamRes').hidden = false;
+      const R = asmReport(M); T.rep = R; $('teamAsmRes').hidden = false;
+      $('teamAsmNote').textContent = (ASM ? R.rows.filter((r) => r.a !== NOASM).length + ' ASM · ' : 'Chưa nạp file chia shop – chưa chia được theo ASM · ') + 'Số mã = số dòng mã × shop sau khi gộp' + (R.none ? ' · ' + R.none + ' ASM chưa có đơn' : '');
+      const shTxt = (r) => r.tot ? r.sh + '/' + r.tot : String(r.sh);
+      $('teamAsmBody').innerHTML = R.rows.map((r, i) => '<tr' + (r.lvl === 'u' ? ' style="color:var(--urgent)"' : '') + '><td class="n">' + (i + 1) + '</td><td style="white-space:nowrap">' + esc(r.a) + '</td><td class="n">' + shTxt(r) + '</td><td class="n">' + fmt(r.n) + '</td><td class="n">' + fmt(r.c) + '</td><td class="n"><b>' + fmt(r.n + r.c) + '</b></td><td class="n">' + fmt(r.q) + '</td><td>' + (r.note ? pill(r.lvl || 'w', r.note) : '<span class="note">Đủ shop</span>') + '</td></tr>').join('');
+      $('teamAsmFoot').innerHTML = '<tr style="font-weight:700"><td></td><td>TOÀN MIỀN</td><td class="n">' + (R.tot ? R.sh + '/' + R.tot : R.sh) + '</td><td class="n">' + fmt(R.n) + '</td><td class="n">' + fmt(R.c) + '</td><td class="n">' + fmt(R.n + R.c) + '</td><td class="n">' + fmt(R.q) + '</td><td></td></tr>';
+      $('teamBody').innerHTML = ok.map((f) => { const n = f.rows.filter((r) => r.type !== 'cut'), c = f.rows.filter((r) => r.type === 'cut'), sh = new Set(f.rows.map((r) => r.shopCode || r.shop)); const drop = f.notes.filter((x) => !x.ok).length, fix = f.notes.filter((x) => x.ok).length;
+        const asms = [...new Set(f.rows.map((r) => cache.get(r.shopCode + '\u0000' + r.shop) || asmOf(r.shopCode, r.shop)).filter(Boolean))];
+        return '<tr><td class="src">' + esc(f.name) + '</td><td>' + (asms.length ? esc(asms.slice(0, 3).join(', ')) + (asms.length > 3 ? ' +' + (asms.length - 3) : '') : '<span class="note">—</span>') + '</td><td class="n">' + sh.size + '</td><td class="n">' + fmt(n.length) + '</td><td class="n">' + fmt(c.length) + '</td><td class="n">' + fmt(sumQ(f.rows)) + '</td><td>' + (drop ? pill('u', 'Bỏ ' + drop + ' dòng') + ' ' : '') + (fix ? pill('w', 'Sửa ' + fix + ' ô') : drop ? '' : '<span class="note">OK</span>') + '</td></tr>'; }).join('');
+      const notes = ok.flatMap((f) => f.notes.map((x) => Object.assign({ file: f.name }, x)));
+      $('teamDropW').hidden = !notes.length; $('teamDropSum').textContent = '· bỏ ' + notes.filter((x) => !x.ok).length + ' dòng, sửa ' + notes.filter((x) => x.ok).length + ' ô';
+      $('teamDropBody').innerHTML = notes.slice(0, 500).map((x) => '<tr><td class="src">' + esc(x.file) + '</td><td class="note">' + esc(x.at) + '</td><td>' + (x.ok ? '' : '<b style="color:var(--urgent)">') + esc(x.text) + (x.ok ? '' : '</b>') + '</td><td class="note">' + esc(x.prod) + '</td></tr>').join('');
+    }
+    async function load(files) {
+      if (typeof XLSX === 'undefined') { $('teamMsg').textContent = 'Chưa tải được thư viện đọc Excel. Kiểm tra mạng.'; return; }
+      const list = [...files]; let i = 0;
+      for (const f of list) {
+        i++; busy('Đang đọc file ' + i + '/' + list.length + ': ' + f.name);
+        await new Promise((r) => setTimeout(r, 30));
+        try { const p = parseTeamFile(f.name, await readAoas(f)); const d = T.files.findIndex((x) => x.name === f.name); if (d >= 0) T.files.splice(d, 1); T.files.push(p); }
+        catch (e) { T.files.push({ name: f.name, err: 'Không mở được file: ' + (e.message || e) }); }
+      }
+      busy('Đang gộp dữ liệu…'); await new Promise((r) => setTimeout(r, 30)); render(); idle();
+    }
+    $('teamIn').addEventListener('change', (e) => { if (e.target.files.length) load(e.target.files); e.target.value = ''; });
+    const dz = $('teamCard'); ['dragover', 'dragenter'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, () => dz.classList.remove('over')));
+    dz.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) load(e.dataTransfer.files); });
+    $('teamSt').addEventListener('click', (e) => { const b = e.target.closest('[data-trm]'); if (!b) return; T.files.splice(+b.dataset.trm, 1); render(); });
+    $('teamClear').addEventListener('click', () => { T.files = []; render(); });
+    async function bookFor(normal, cut, extra) {
+      const wb = new ExcelJS.Workbook(); await wb.xlsx.load(b64buf(FORM_MTR_B64));
+      fillForm(wb.getWorksheet('HÀNG THƯỜNG'), normal, true); fillForm(wb.getWorksheet('CẮT LIỀU'), cut, true);
+      (extra || []).forEach(([n, cols, rows]) => plainSheet(wb, n, cols, rows));
+      return wb;
+    }
+    const stamp = () => { const d = new Date(), p = (x) => String(x).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()); };
+    $('teamXls').addEventListener('click', async () => {
+      const M = T.merged, msg = $('teamMsg'); if (!M) { msg.textContent = 'Chưa có dữ liệu.'; return; }
+      if (typeof ExcelJS === 'undefined') { msg.textContent = 'Chưa tải được thư viện xuất Excel.'; return; }
+      const btn = $('teamXls'); btn.disabled = true; busy('Đang tạo file gộp toàn miền (' + fmt(M.normal.length + M.cut.length) + ' dòng)…'); await new Promise((r) => setTimeout(r, 30));
+      try {
+        const ok = T.files.filter((f) => !f.err), sumQ = (L) => L.reduce((a, r) => a + r.qty, 0);
+        const byFile = ok.map((f) => ({ file: f.name, shops: new Set(f.rows.map((r) => r.shopCode || r.shop)).size, n: f.rows.filter((r) => r.type !== 'cut').length, c: f.rows.filter((r) => r.type === 'cut').length, q: sumQ(f.rows), drop: f.notes.filter((x) => !x.ok).length }));
+        const R = asmReport(M), asmRows = R.rows.map((r, i) => ({ i: i + 1, a: r.a, sh: r.tot ? r.sh + '/' + r.tot : r.sh, n: r.n, c: r.c, t: r.n + r.c, q: r.q, note: r.note }));
+        asmRows.push({ i: '', a: 'TOÀN MIỀN', sh: R.tot ? R.sh + '/' + R.tot : R.sh, n: R.n, c: R.c, t: R.n + R.c, q: R.q, note: '' });
+        const wb = await bookFor(M.normal, M.cut, [['Tổng hợp theo file ASM', [['File', 'file', 50], ['Số shop', 'shops', 9], ['Dòng hàng thường', 'n', 15], ['Dòng cắt liều', 'c', 13], ['Tổng SL', 'q', 11], ['Dòng bị bỏ', 'drop', 11]], byFile],
+          ['Báo cáo theo ASM', [['STT', 'i', 6], ['ASM', 'a', 34], ['Shop đặt hàng', 'sh', 14], ['Số mã hàng thường', 'n', 17], ['Số mã cắt liều', 'c', 15], ['Tổng số mã', 't', 12], ['Tổng SL đặt', 'q', 12], ['Ghi chú', 'note', 30]], asmRows]]);
+        const fn = 'Dat_hang_toan_mien_' + stamp() + '.xlsx';
+        await saveFile(fn, new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+        msg.textContent = 'Đã tạo ' + fn + ' · ' + fmt(M.normal.length) + ' dòng hàng thường, ' + fmt(M.cut.length) + ' dòng cắt liều.';
+      } catch (e) { msg.textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không xuất được: ' + (e.message || e); }
+      finally { btn.disabled = false; idle(); }
+    });
+    $('teamAsmIn').addEventListener('change', async (e) => {
+      const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+      if (typeof XLSX === 'undefined') { $('teamAsmLine').textContent = 'Chưa tải được thư viện đọc Excel. Kiểm tra mạng.'; return; }
+      busy('Đang đọc file chia shop…');
+      try {
+        const rows = parseAsmBook(await readAoas(f));
+        if (!rows || !rows.length) { idle(); $('teamAsmLine').innerHTML = '⚠ <b>' + esc(f.name) + '</b>: không thấy cột Mã cửa hàng / Tên cửa hàng và cột ASM. ' + (ASM && ASM.src ? 'Vẫn giữ file đang dùng (' + esc(ASM.src) + ').' : 'Kiểm tra lại đúng file chia shop chưa.'); return; }
+        const d = new Date(), src = { src: f.name.replace(/\.[^.]+$/, ''), rows, at: d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear() };
+        try { localStorage.setItem(AK, JSON.stringify(src)); } catch (er) { /* không lưu được: vẫn dùng trong phiên này */ }
+        asmBuild(src); asmLine(); render();
+      } catch (er) { $('teamAsmLine').textContent = 'Không mở được file chia shop: ' + (er.message || er); }
+      idle();
+    });
+    $('teamAsmReset').addEventListener('click', () => { try { localStorage.removeItem(AK); } catch (e) { /* bỏ qua */ } asmInit(); asmLine(); render(); });
+    $('teamAsmImg').addEventListener('click', async () => {
+      const R = T.rep, msg = $('teamAsmMsg'); if (!R) { msg.textContent = 'Chưa có dữ liệu.'; return; }
+      try {
+        const d = new Date(), p = (n) => String(n).padStart(2, '0');
+        await tableImage({ title: 'BÁO CÁO ĐẶT HÀNG TOÀN MIỀN THEO ASM', file: 'Bao_cao_dat_hang_theo_ASM_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.png', width: 1240,
+          sub: 'Ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · ' + T.files.filter((f) => !f.err).length + ' file ASM · số mã = dòng mã × shop sau khi gộp' + (ASM ? ' · chia shop theo ' + ASM.src : ''),
+          cols: [{ h: 'STT', w: 52, a: 'center' }, { h: 'ASM', w: 0, a: 'left' }, { h: 'Shop đặt', w: 100, a: 'center' }, { h: 'Mã hàng thường', w: 140, a: 'right' }, { h: 'Mã cắt liều', w: 120, a: 'right' }, { h: 'Tổng số mã', w: 120, a: 'right' }, { h: 'Tổng SL đặt', w: 120, a: 'right' }, { h: 'Ghi chú', w: 210, a: 'left' }],
+          rows: R.rows.map((r, i) => ({ vals: [i + 1, r.a, r.tot ? r.sh + '/' + r.tot : r.sh, fmt(r.n), fmt(r.c), fmt(r.n + r.c), fmt(r.q), r.note], lvl: r.lvl })),
+          total: ['', 'TOÀN MIỀN', R.tot ? R.sh + '/' + R.tot : R.sh, fmt(R.n), fmt(R.c), fmt(R.n + R.c), fmt(R.q), R.none ? R.none + ' ASM chưa có đơn' : ''] }, msg, $('teamAsmImg').closest('.actions'));
+      } catch (e) { msg.textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không tạo được ảnh: ' + (e.message || e.code); }
+    });
+    asmLine(); render();
+  })();
   /* ---------- báo cáo hình ảnh: số mã hàng thường / cắt liều theo shop ---------- */
   function orderSummary() {
     const o = state.ord, m = new Map();
