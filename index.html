@@ -476,6 +476,8 @@ tbody tr.cdpart:hover td { background: var(--accent-soft); }
 .imgdlg-body { overflow: auto; padding: 14px; background: var(--surface-2); flex: 1 1 auto; }
 .imgdlg-body img { display: block; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .badge.err { background: var(--urgent-bg); color: var(--urgent); }
+.badge.warn { background: var(--warn-bg, #fff1d0); color: var(--warn, #8a5a00); }
+.srccard .srcbody .st.warn { color: var(--warn); background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 25%, transparent); }
 .srccard .srcbody .st.bad { color: var(--urgent); background: var(--urgent-bg); border-color: color-mix(in srgb, var(--urgent) 25%, transparent); }
 .guidebtn { margin-left: auto; background: var(--surface); }
 .guidedlg { width: min(720px, 94vw); }
@@ -2864,7 +2866,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       // file/sheet trống nhưng shop đó đã có dòng đặt hàng ở file/sheet khác (gửi chung) -> không coi là chưa nộp
       const allRows = good.flatMap((x) => x.rows), elsewhere = (x) => { const f = state.orderFiles[x.fi] || state.orderFiles.find((y) => y.name === x.name); if (!f || !f.part || !f.code) return 0; const c = f.code; return allRows.filter((r) => shopNo(r.shopR || r.shop) === c).length; };
       setSt('order', out.length ? out.map((x) => (x.err ? x.name + ': ' + x.err : x.outside ? x.name + ': shop ' + x.code + ' không thuộc khu vực của bạn (không có trong file tồn kho), bỏ qua' : x.empty && elsewhere(x) ? x.name + ': sheet trống – shop đã đặt chung ở file/sheet khác (' + elsewhere(x) + ' dòng), không thiếu' : x.empty ? x.name + ': ⚠ file trống – đúng form nhưng chưa có dòng đặt hàng nào (shop chưa điền hoặc nộp nhầm file mẫu), bỏ qua' : x.name + ': ' + cntT(x, 'normal') + ' dòng hàng thường, ' + cntT(x, 'cut') + ' dòng cắt liều' + (x.dropped ? ', bỏ ' + x.dropped + ' dòng không đủ thông tin' : '') + (x.unmatched ? ', bỏ ' + x.unmatched + ' dòng không rõ shop' : (x.rows.length ? '' : ', không nhận ra shop: cột Mã Shop / Tên Shop trong file trống hoặc không khớp shop trong tồn kho')))).join('\n') : 'Chưa tải file.',
-        out.some((x) => !x.empty && !x.outside && (x.err || x.unmatched || x.dropped || !x.rows.length)) ? 'bad' : out.length ? 'ok' : '');
+        out.some((x) => !x.empty && !x.outside && (x.err || !x.rows.length)) ? 'bad' : out.some((x) => !x.empty && !x.outside && (x.unmatched || x.dropped)) ? 'warn' : out.length ? 'ok' : ''); // file đọc được nhưng có dòng thiếu thông tin: chỉ cảnh báo, không báo sai file
       { const st = $('st-order'); if (st && out.length) { const lines = st.textContent.split('\n'); st.innerHTML = lines.map((l, i) => '<div class="fline"><span>' + esc(l) + '</span>' + (out[i] ? '<button type="button" class="fx" data-rmf="' + i + '" title="Bỏ riêng file này" aria-label="Bỏ file ' + esc(out[i].name) + '">✕</button>' : '') + '</div>').join('');
         st.querySelectorAll('[data-rmf]').forEach((b) => b.addEventListener('click', () => { const f = out[+b.dataset.rmf]; if (!f) return; const nn = (x) => String(x || '').normalize('NFC').trim().toLowerCase();
           state.orderFiles = (state.orderFiles || []).filter((x) => x.name !== f.name); state.svFiles.order = (state.svFiles.order || []).filter((x) => nn(x.name) !== nn(f.name)); saveSv('order'); reattach('order'); refreshAll(); })); } }
@@ -4180,7 +4182,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         const st = $('st-' + k), row = slot.querySelector('.slotrow');
         if (st) body.appendChild(st); if (row) body.appendChild(row);
         slot.appendChild(body);
-        const sync = () => { const bad = !!(st && st.classList.contains('bad')), has = !bad && !!(st && st.textContent.trim() && !/^Chưa tải file/.test(st.textContent.trim())); slot.classList.toggle('empty', !has && !bad); setBadge('badge-' + k, has); if (bad) { const b = $('badge-' + k); b.className = 'badge err'; b.textContent = 'Sai file'; } };
+        const sync = () => { const bad = !!(st && st.classList.contains('bad')), has = !bad && !!(st && st.textContent.trim() && !/^Chưa tải file/.test(st.textContent.trim())); slot.classList.toggle('empty', !has && !bad); setBadge('badge-' + k, has); if (bad) { const b = $('badge-' + k); b.className = 'badge err'; b.textContent = 'Sai file'; } else if (st && st.classList.contains('warn')) { const b = $('badge-' + k); b.className = 'badge warn'; b.textContent = 'Đã nạp · cần kiểm tra'; } };
         if (st) new MutationObserver(sync).observe(st, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] }); sync();
         // kéo thả file vào thẻ
         ['dragenter', 'dragover'].forEach((ev) => slot.addEventListener(ev, (e) => { e.preventDefault(); slot.classList.add('over'); }));
