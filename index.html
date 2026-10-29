@@ -684,9 +684,9 @@ th.sortable.asc, th.sortable.desc { color: var(--accent); }
       <button type="button" data-tab="newsku" data-grp="Khảo sát" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/></svg><span>Hàng chưa kinh doanh</span></button>
       <button type="button" data-tab="price" data-grp="Khảo sát" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12 12 20l-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Khảo sát giá đối thủ</span></button>
       <button type="button" data-tab="toa" data-grp="Khảo sát" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18H7z"/><path d="M10 8h4M10 12h4M10 16h2"/></svg><span>Khảo sát toa</span></button>
-      <div class="navgrp">Tổng hợp</div>
-      <button type="button" data-tab="team" data-grp="Tổng hợp" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3.3 2.7-5 6-5s6 1.7 6 5M14.5 14.2c.8-.3 1.6-.4 2.5-.4 2.5 0 4 1.3 4 4"/></svg><span>Team Hàng Hoá</span></button>
-      <button type="button" data-tab="report" data-grp="Tổng hợp" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Báo cáo tổng hợp</span></button>
+      <div class="navgrp">Team Hàng Hoá</div>
+      <button type="button" data-tab="team" data-grp="Team Hàng Hoá" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3.3 2.7-5 6-5s6 1.7 6 5M14.5 14.2c.8-.3 1.6-.4 2.5-.4 2.5 0 4 1.3 4 4"/></svg><span>Tổng hợp File Đặt Hàng Miền Trung</span></button>
+      <button type="button" data-tab="report" data-grp="Team Hàng Hoá" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Báo cáo tổng hợp</span></button>
     </nav>
     <div class="sidefoot">
       <div class="srcbox" id="sbStock"><span class="lbl"><span class="dot"></span>Tồn kho xoay vòng</span><span class="fn" id="sbStockName">Chưa nạp file</span></div>
@@ -2389,15 +2389,15 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (inn.length) sheets.push(['Nhận về', cIn, inn]);
         if (left.length) sheets.push(['Chưa có shop nhận', cLeft, left]);
         if (!sheets.length) continue;
-        zip.file(safeName(shopLabel(sh)) + '.xlsx', await makeBook(sheets).xlsx.writeBuffer());
+        zip.file(zipName('Hàng không sức bán', sh) + '.xlsx', await makeBook(sheets).xlsx.writeBuffer());
         await new Promise((r) => setTimeout(r, 0));
       }
       msg.textContent = 'Đang tạo file tổng hợp...';
       const all = makeBook([['Gợi ý luân chuyển', C, out, { group: 'grp', merge: ['shopCode', 'shop', 'code', 'name', 'unit', 'attr', 'ton', 'sold', 'sold60', 'keep', 'status', 'cd'] }],
         ['Chưa có shop nhận', [...C.filter((c) => !noR.includes(c[1])), ['Shop cân nhắc 1', 's1', 46], ['Shop cân nhắc 2', 's2', 46], ['Shop cân nhắc 3', 's3', 46]], rows.filter((r) => !r.to && !/^Giữ lại/.test(r.status))]]);
-      zip.file('00_Tong_hop_luan_chuyen.xlsx', await all.xlsx.writeBuffer());
+      zip.file('00_Ton_khong_suc_ban_tong_hop.xlsx', await all.xlsx.writeBuffer());
       const blob = await zip.generateAsync({ type: 'blob' });
-      await saveFile('Luan_chuyen_ton_khong_ban_theo_shop.zip', blob);
+      await saveFile('Ton_khong_suc_ban_theo_shop.zip', blob);
       msg.textContent = 'Đã tạo ZIP: ' + i + ' file shop + 1 file tổng hợp.';
     } catch (e) { msg.textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không xuất được: ' + (e.message || e.code); }
     finally { btn.disabled = false; }
@@ -2632,6 +2632,8 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     return { needs, gives };
   }
   const safeName = (s) => s.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 70);
+  /** Tên file trong ZIP theo mục: "<Mục> - <mã shop> - <tên shop>" để giải nén các mục vào cùng thư mục không bị trùng tên. */
+  const zipName = (kind, sh) => { const c = shopNo(sh), l = shopLabel(sh); return (kind + ' - ' + (c && c !== l ? c + ' - ' : '') + l).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 110); };
 
   async function exportZip() {
     if (typeof ExcelJS === 'undefined' || typeof JSZip === 'undefined') { $('xmsg').textContent = 'Chưa tải được thư viện xuất Excel. Kiểm tra mạng rồi mở lại trang.'; return; }
@@ -2650,11 +2652,11 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         addNeedForms(wb, mine);
         if (giving.length) sheetGives(wb, giving, false);
         nearSheet(wb, nearRows().filter((n) => n.r.shop === s));
-        zip.file(safeName(s) + '.xlsx', await wb.xlsx.writeBuffer());
+        zip.file(zipName('Hàng thiếu', s) + '.xlsx', await wb.xlsx.writeBuffer());
         await new Promise((r) => setTimeout(r, 0));
       }
       const blob = await zip.generateAsync({ type: 'blob' });
-      await saveFile('HangHoa_theo_shop.zip', blob);
+      await saveFile('Hang_thieu_theo_shop.zip', blob);
       $('xmsg').textContent = 'Đã tạo ' + shops.length + ' file trong ZIP.';
     } catch (e) { $('xmsg').textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không xuất được: ' + (e.message || e.code); }
     finally { btns.forEach((b) => (b.disabled = false)); }
@@ -3321,12 +3323,12 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (inn.length) sheets.push(['Nhận về', cIn, inn]);
         if (left.length) sheets.push(['Chưa có shop nhận', cLeft, left]);
         if (!sheets.length) continue;
-        zip.file(safeName(lab) + '.xlsx', await makeBook(sheets).xlsx.writeBuffer()); i++;
+        zip.file(zipName('Cận khó bán', sh) + '.xlsx', await makeBook(sheets).xlsx.writeBuffer()); i++;
         await new Promise((r) => setTimeout(r, 0));
       }
       msg.textContent = 'Đang tạo file cả khu vực...';
-      zip.file('00_Dieu_phoi_can_kho_ban_ca_khu_vuc.xlsx', await makeBook(hardAreaSheets(R)).xlsx.writeBuffer());
-      await saveFile('Dieu_phoi_can_kho_ban_theo_shop.zip', await zip.generateAsync({ type: 'blob' }));
+      zip.file('00_Can_kho_ban_tong_hop.xlsx', await makeBook(hardAreaSheets(R)).xlsx.writeBuffer());
+      await saveFile('Can_kho_ban_theo_shop.zip', await zip.generateAsync({ type: 'blob' }));
       msg.textContent = 'Đã tạo ZIP: ' + i + ' file shop + 1 file cả khu vực.';
     } catch (e) { msg.textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không xuất được: ' + (e.message || e.code); }
     finally { btn.disabled = false; }
