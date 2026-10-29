@@ -3411,7 +3411,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     const nameKey2 = (v) => nameKey(String(v || '').replace(/^\s*(asm\s*\d+\s+)?(nhà mới\s+)?(lc|vx|hope|fpt long châu)\s+/i, ''));
     let ASM = null;
     /** Danh sách KV dự phòng (khi file chia shop không có sheet DS ASM). File có sheet DS ASM (Khu vực, Mã NV, Tên nhân viên) thì ưu tiên file. */
-    const KV_DEFAULT = 'KV1 - Lý Văn Hoanh|KV2 - Ngô Quốc Việt|KV3 - Huỳnh Bảo Châu|KV4 - Lê Thanh Dũng|KV5 - Đặng Đình Chỉnh|KV6 - Trần Lê Thúy Ngọc|KV7 - Phạm Thị Phương Dung|KV8 - Nguyễn Thị Mai Phương|KV9 - Huỳnh Quang Huy|KV10 - Phan Anh Tuấn|KV11 - Nguyễn Minh Nguyên|KV12 - Trần Thị Ngọc Ly|KV13 - Nguyễn Xuân Chiến|KV14 - Trương Văn Huy|KV15 - Hà Hồng Định|KV16 - Nguyễn Thị Ly Ly|KV17 - Nguyễn Thị Thu Thảo|KV18 - Trương Thị Thúy Triều|KV19 - Lê Thị Trâm Anh|KV20 - Nguyễn Thị Ngọc Tuyết|KV21 - Nguyễn Duy Văn|KV22 - Nguyễn Thị Thương Mến|KV23 - Lê Như Đăng Khoa|KV24 - Hồ Thị Bích Ly|KV25 - Võ Phúc An|KV26 - Đậu Thanh Huyền|KV27 - Nguyễn Thị Ngọc Bích|KV28 - Hoàng Thu Sương|KV29 - Nguyễn Kim Cương|KV30 - Lê Thị Hồng Vân|KV31 - Lê Sĩ Đồng|KV32 - Phạm Thị Cẩm Vân|KV33 - Lê Ngọc Công|KV34 - Trần Ngọc Long|KV35 - Võ Nguyên Huy|KV36 - Đoàn Minh Trí'.split('|').map((x) => { const m = x.match(/^(KV\d+)\s*-\s*(.+)$/); return [m[1], '', m[2]]; });
+    const KV_DEFAULT = 'KV1 - Lý Văn Hoanh|KV2 - Ngô Quốc Việt|KV3 - Huỳnh Bảo Châu|KV4 - Lê Thanh Dũng|KV5 - Đặng Đình Chỉnh|KV6 - Trần Lê Thúy Ngọc|KV7 - Phạm Thị Phương Dung|KV8 - Nguyễn Thị Mai Phương|KV10 - Phan Anh Tuấn|KV11 - Nguyễn Minh Nguyên|KV12 - Trần Thị Ngọc Ly|KV13 - Nguyễn Xuân Chiến|KV14 - Trương Văn Huy|KV15 - Hà Hồng Định|KV16 - Nguyễn Thị Ly Ly|KV17 - Nguyễn Thị Thu Thảo|KV18 - Trương Thị Thúy Triều|KV19 - Lê Thị Trâm Anh|KV20 - Nguyễn Thị Ngọc Tuyết|KV21 - Nguyễn Duy Văn|KV22 - Nguyễn Thị Thương Mến|KV23 - Lê Như Đăng Khoa|KV24 - Hồ Thị Bích Ly|KV25 - Võ Phúc An|KV26 - Đậu Thanh Huyền|KV27 - Nguyễn Thị Ngọc Bích|KV28 - Hoàng Thu Sương|KV29 - Nguyễn Kim Cương|KV30 - Lê Thị Hồng Vân|KV31 - Lê Sĩ Đồng|KV32 - Phạm Thị Cẩm Vân|KV33 - Lê Ngọc Công|KV34 - Trần Ngọc Long|KV35 - Võ Nguyên Huy|KV36 - Đoàn Minh Trí'.split('|').map((x) => { const m = x.match(/^(KV\d+)\s*-\s*(.+)$/); return [m[1], '', m[2]]; });
     const kvNum = (l) => { const m = /^KV(\d+)\b/.exec(l || ''); return m ? +m[1] : 1e9; };
     function asmBuild(src) {
       const byCode = new Map(), byName = new Map(), byName2 = new Map();
@@ -3472,7 +3472,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     function asmReport(M) {
       const by = new Map(), get = (a) => { if (!by.has(a)) by.set(a, { a, sh: new Set(), n: 0, c: 0, q: 0 }); return by.get(a); };
       [['n', M.normal], ['c', M.cut]].forEach(([t, L]) => L.forEach((r) => { const e = get(r.asm || NOASM); e[t]++; e.q += r.qty; e.sh.add(r.shopCode || r.shop); }));
-      if (ASM) { ASM.shopsOf.forEach((_, a) => get(a)); ASM.kvAll.forEach((a) => get(a)); }
+      if (ASM) ASM.shopsOf.forEach((_, a) => get(a)); // chỉ ASM có shop trong file chia shop
       const rows = [...by.values()].map((e) => {
         const tot = ASM && ASM.shopsOf.get(e.a) || 0, sh = e.sh.size;
         const noKv = ASM && e.a !== NOASM && kvNum(e.a) === 1e9, none = !(e.n + e.c);
