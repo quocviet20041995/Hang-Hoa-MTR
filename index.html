@@ -2204,7 +2204,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
   async function restoreSurveys(tries) {
     if (typeof XLSX === 'undefined') { if ((tries || 0) < 40) setTimeout(() => restoreSurveys((tries || 0) + 1), 300); return; }
     idbDo('readwrite', (st) => st.delete(SVK('order'))).catch(() => {}); // xoá bản lưu file đặt hàng cũ (nếu có)
-    for (const k of ['expiry', 'newsku', 'price', 'toa', 'kpi']) {
+    for (const k of ['expiry', 'kpisum', 'newsku', 'price', 'toa', 'kpi']) {
       let rec = null; try { rec = await idbDo('readonly', (st) => st.get(SVK(k))); } catch (e) { rec = null; }
       if (!rec || !rec.files || !rec.files.length) continue;
       { const nn = (x) => String(x || '').normalize('NFC').trim().toLowerCase(), m = new Map(); rec.files.forEach((f) => m.set(nn(f.name), f)); if (m.size !== rec.files.length) { rec.files = [...m.values()]; state.svFiles[k] = rec.files; saveSv(k); } }
@@ -2729,7 +2729,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       bottom: '<details id="cutWrap" open hidden><summary id="cutSum" style="font-weight:600;cursor:pointer"></summary><div class="tablewrap" style="max-height:300px;margin-top:8px"><table><thead><tr><th>Shop</th><th>Sản phẩm</th><th>ĐVT</th><th class="n">SL</th><th>Ghi chú</th></tr></thead><tbody id="cutBody"></tbody></table></div></details>' +
         '<details id="rmWrap" hidden><summary id="rmSum"></summary><div class="rmbar"><span class="seg" id="rmSeg"></span><span class="rmacts"><button type="button" class="btn sm" id="rmKeep" disabled>Vẫn đặt các mã đã chọn</button><span class="note" id="rmKeptNote"></span></span></div><div class="tablewrap" style="max-height:300px;margin-top:8px"><table><thead><tr><th class="pkchk"><input type="checkbox" id="rmAll" aria-label="Chọn tất cả"></th><th>Shop</th><th>Sản phẩm</th><th class="n">SL</th><th>Lý do loại</th></tr></thead><tbody id="rmBody"></tbody></table></div></details>' },
     expiry: { needStock: true, title: 'Cận date', desc: 'Nhập file Báo cáo KPI cận date (CSV xuất từ hệ thống). Tool báo cáo tiến độ KPI cận date theo shop và gợi ý chuyển các lô Tính KPI còn lại sang shop bán nhanh hơn (theo tồn kho xoay vòng), ưu tiên cùng tỉnh.',
-      slots: [{ k: 'expiry', multiple: true, label: 'Chọn file cận date', hint: 'Có thể chọn cùng lúc file KPI cận date tổng theo shop (Chỉ tiêu, Thực hiện, Tỷ lệ hoàn thành) để % HT KPI khớp đúng hệ thống. File Báo cáo KPI cận date (.csv): Mã shop, Tên shop, Mã sản phẩm, Tên sản phẩm, Barcode cận date, Hạn sử dụng, Giá bán L1, ĐVT, KPI, Chỉ tiêu, Thực hiện, Còn lại.' }],
+      slots: [{ k: 'expiry', label: 'Chọn file cận date', hint: 'File Báo cáo KPI cận date theo sản phẩm (.csv): Mã shop, Tên shop, Mã sản phẩm, Tên sản phẩm, Barcode cận date, Hạn sử dụng, Giá bán L1, ĐVT, KPI, Chỉ tiêu, Thực hiện, Còn lại.' }],
       params: '<label class="check wide"><input type="checkbox" id="eKpiOnly" checked><span>Chỉ gợi ý chuyển các lô Tính KPI<br><span class="note">Bỏ chọn để gợi ý cả lô Không KPI.</span></span></label><label>Chừa lại số ngày trước hạn<input type="number" id="eBuf" value="7" min="0" step="1"></label><label>Số shop nhận tối đa mỗi dòng<select id="eMax"><option value="1">1</option><option value="2" selected>2</option></select></label><input type="hidden" id="eClear" value="60">',
       heads: ['Shop cận date', 'Sản phẩm', 'Hạn dùng', 'Còn lại', 'Tồn tại shop', 'Bán 30N tại shop', 'Chuyển sang (bán 30N · có sẵn)', 'Trạng thái'], shopFilter: true, btn: 'Tải báo cáo cận date (Excel)',
       extra: '<button class="btn ghost" id="bx-expiry-list" type="button">Danh sách KPI theo shop (Excel)</button><button class="btn ghost" id="bx-expiry-img" type="button">Xuất báo cáo (hình ảnh)</button>', top: '<div id="kpiBox"></div><div class="note" id="sumExpiry"></div>' },
@@ -2903,8 +2903,6 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       return;
     }
     const p = state.parsed[k];
-    const SUMTXT = k === 'expiry' && state.kpiShopSum ? ' · File tổng theo shop ' + state.kpiShopSum.name + ' (' + state.kpiShopSum.map.size + ' shop): % HT KPI lấy theo file này' + (p && p.month && state.kpiShopSum.month && p.month !== state.kpiShopSum.month ? ' – ⚠ khác tháng file chi tiết (' + state.kpiShopSum.month + ' ≠ ' + p.month + '), không dùng' : '') : '';
-    if (!p && SUMTXT) { state.surveys[k] = null; setSt(k, 'Đã nạp' + SUMTXT + '. Cần thêm file Báo cáo KPI cận date chi tiết (theo mã sản phẩm) để chạy mục Cận date.', 'bad'); return; }
     if (!p) { state.surveys[k] = null; setSt(k, 'Chưa tải file.'); return; }
     if (p.err) { state.surveys[k] = null; setSt(k, p.err, 'bad'); return; }
     if (k === 'kpi') { state.surveys.kpi = { rows: p.rows, unmatched: 0 }; setSt('kpi', p.name + ': ' + p.rows.length + ' mã tính KPI.', p.rows.length ? 'ok' : 'bad'); return; }
@@ -2912,7 +2910,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     if (!at.rows.length) { state.surveys[k] = null; setSt(k, 'Không có dòng nào khớp shop trong file tồn kho' + (at.unmatched ? ' (' + at.unmatched + ' dòng sai tên hoặc mã shop)' : '') + '.', 'bad'); return; }
     at.month = p.month || ''; at.kpiFile = !!p.kpiFile;
     state.surveys[k] = at;
-    setSt(k, p.name + ': ' + at.rows.length + ' dòng hợp lệ' + (p.kpiFile ? ' (' + at.rows.filter((r) => r.kpi).length + ' dòng Tính KPI)' : '') + (at.unmatched ? ', bỏ ' + at.unmatched + ' dòng vì shop không có trong file tồn kho' : '') + '.' + SUMTXT, at.unmatched ? 'bad' : 'ok');
+    setSt(k, p.name + ': ' + at.rows.length + ' dòng hợp lệ' + (p.kpiFile ? ' (' + at.rows.filter((r) => r.kpi).length + ' dòng Tính KPI)' : '') + (at.unmatched ? ', bỏ ' + at.unmatched + ' dòng vì shop không có trong file tồn kho' : '') + '.', at.unmatched ? 'bad' : 'ok');
   }
   /* ---------- sửa giúp file shop: trả lại đúng form, ô đã sửa ghi nhật ký ở sheet riêng ---------- */
   const prodOfLog = (f, l) => { const it = f.all.find((a) => a.sheet === l.sheet && a.line === l.line); if (!it) return ''; const r = it.raw; return ((r.code ? r.code + ' - ' : '') + r.name).trim(); };
@@ -3048,7 +3046,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     const c = document.querySelector('[data-clear="newsku"]'); if (c) c.hidden = !fs.length;
   }
   async function loadSurvey(k, files, restore) {
-    if (!restore && k !== 'expiry') rememberFiles(k, files); // cận date: lưu sau khi biết file nào là chi tiết / tổng theo shop
+    if (!restore && k !== 'kpisum' && k !== 'expiry') rememberFiles(k, files); // cận date / % HT: lưu sau khi biết đúng loại file
     if (k === 'newsku') return loadHckd(files);
     try {
       if (k === 'order') {
@@ -3083,18 +3081,24 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         }
         state.orderFiles = list;
       } else {
-        if (k === 'expiry') {
-          // file chi tiết (theo mã) + file tổng theo shop (Chỉ tiêu/Thực hiện/Tỷ lệ) có thể chọn cùng lúc
-          let det = null, sum = null, lastErr = null; const hadDet = !!(state.parsed.expiry && state.parsed.expiry.rows); // chưa có file chi tiết: file tổng nạp trước vẫn giữ
-          const kinds = [];
-          for (const f of files) { const aoas = await readAoas(f), sm = parseKpiShopSum(aoas); if (sm) { sum = Object.assign({ name: f.name }, sm); kinds.push([f, 'sum']); continue; } const p = parseAny(k, aoas, ''); if (p.error) lastErr = { err: p.error }; else { det = { rows: p.rows, name: f.name, month: p.month || '', kpiFile: !!p.kpiFile }; kinds.push([f, 'det']); } }
-          if (!restore && kinds.length) { // nhớ file: chỉ chọn file tổng thì giữ lại file chi tiết đã nạp trước đó
-            try { const keep = (state.svFiles.expiry || []).filter((x) => (x.kind === 'sum' ? !sum && !(det && hadDet) : !det));
-              const pick = ['det', 'sum'].map((t) => kinds.filter((x) => x[1] === t).pop()).filter(Boolean);
-              const recs = await Promise.all(pick.map(([f, t]) => f.arrayBuffer().then((buf) => ({ name: f.name, size: f.size, lastModified: f.lastModified || 0, buf, at: Date.now(), kind: t }))));
-              state.svFiles.expiry = [...keep, ...recs]; saveSv('expiry'); if (window.__mtrStaleCards) window.__mtrStaleCards(); } catch (e) { /* bỏ qua */ } }
-          if (det) state.parsed[k] = det; else if (!sum) state.parsed[k] = lastErr || state.parsed[k];
-          if (sum) state.kpiShopSum = sum; else if (det && hadDet) state.kpiShopSum = null;
+        if (k === 'kpisum') { // File % HT KPI cận date theo shop (không bắt buộc): số đúng 100% theo hệ thống
+          const f = files[0], sm = parseKpiShopSum(await readAoas(f));
+          state.kpiSumErr = sm ? '' : f.name + ': không đúng file % HT KPI theo shop (cần cột Mã shop, Chỉ tiêu, Thực hiện, Tỷ lệ hoàn thành).' + (state.kpiShopSum ? ' Vẫn dùng file cũ.' : '');
+          if (sm) {
+            const d = fileDate(f.name, f.lastModified), now = new Date(), cur = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            const fm = /^(\d{4})-(\d{1,2})/.exec(sm.month || ''), mon = fm ? fm[1] + '-' + fm[2].padStart(2, '0') : d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') : cur;
+            if (mon !== cur) { // file của tháng trước: tự xoá để người dùng nạp lại khi cần
+              if (restore) { state.kpiShopSum = null; state.svFiles.kpisum = []; saveSv('kpisum'); } // nạp nhầm file tháng khác thì giữ file đang dùng
+              state.kpiSumErr = restore ? 'File % HT KPI theo shop tháng ' + mon.split('-').reverse().join('/') + ' đã tự xoá vì đã sang tháng mới. Nạp file tháng này nếu cần.' : f.name + ' là tháng ' + mon.split('-').reverse().join('/') + ', không phải tháng này – không dùng.';
+            } else {
+              state.kpiShopSum = Object.assign({ name: f.name, date: d, at: restore && state.svFiles.kpisum && state.svFiles.kpisum[0] ? state.svFiles.kpisum[0].at : Date.now() }, sm);
+              if (!restore) rememberFiles('kpisum', files);
+            }
+          }
+          syncKpiSum(); refreshAll(); return;
+        }
+        if (k === 'expiry') { const f0 = files[0], a0 = await readAoas(f0); if (parseKpiShopSum(a0)) { return loadSurvey('kpisum', [f0], restore); } // chọn nhầm file % HT ở ô cận date: tự đưa sang ô % HT
+          if (!restore) rememberFiles('expiry', [f0]); const p = parseAny(k, a0, ''); state.parsed[k] = p.error ? { err: p.error } : { rows: p.rows, name: f0.name, date: fileDate(f0.name, f0.lastModified), month: p.month || '', kpiFile: !!p.kpiFile };
         } else {
         const f = files[0], p = parseAny(k, await readAoas(f), '');
         state.parsed[k] = p.error ? { err: p.error } : { rows: p.rows, name: f.name, month: p.month || '', kpiFile: !!p.kpiFile };
@@ -3105,7 +3109,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
   }
   document.querySelectorAll('input[data-k]').forEach((inp) => inp.addEventListener('change', () => { if (inp.files.length) loadSurvey(inp.dataset.k, [...inp.files]); inp.value = ''; }));
   document.querySelectorAll('[data-clear]').forEach((b) => b.addEventListener('click', () => {
-    const k = b.dataset.clear; state.svFiles[k] = []; saveSv(k); if (window.__mtrStaleCards) setTimeout(window.__mtrStaleCards, 0); if (k === 'newsku') { state.hckdFiles = []; syncHckd(); refreshAll(); return; } state.parsed[k] = null; if (k === 'expiry') state.kpiShopSum = null; if (k === 'order') state.orderFiles = []; reattach(k); refreshAll();
+    const k = b.dataset.clear; state.svFiles[k] = []; saveSv(k); if (window.__mtrStaleCards) setTimeout(window.__mtrStaleCards, 0); if (k === 'newsku') { state.hckdFiles = []; syncHckd(); refreshAll(); return; } state.parsed[k] = null; if (k === 'order') state.orderFiles = []; reattach(k); refreshAll();
   }));
   document.querySelectorAll('[data-tpl]').forEach((b) => b.addEventListener('click', () => downloadTemplate(b.dataset.tpl)));
 
@@ -3281,6 +3285,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       if ($('rmUnkeep')) $('rmUnkeep').onclick = () => { state.ordKeep = new Set(); refreshAll(); };
       if (window.__mtrOrderUX) window.__mtrOrderUX();
     } else if (curTab === 'expiry') {
+      syncKpiSum();
       renderHard();
       const e = state.exp;
       if (!e) { $('stats-expiry').innerHTML = ''; $('sumExpiry').textContent = ''; $('kpiBox').innerHTML = ''; renderGeneric('expiry', [], () => '', (L) => L.shop, (L) => L.prod, 'Tải file cận date để xem báo cáo và gợi ý chuyển hàng.'); return; }
@@ -3289,7 +3294,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       $('sumExpiry').textContent = '';
       $('kpiBox').innerHTML = K ? '<div class="tablewrap" style="max-height:none"><table><thead><tr><th>Shop</th><th class="n">Mã KPI</th><th class="n">Chỉ tiêu KPI (đ)</th><th class="n">Thực hiện (đ)</th><th class="n">% HT KPI</th><th class="n">Cần thêm để đạt 80% (đ)</th><th class="n">Còn lại KPI (SL)</th><th class="n">% HT toàn bộ</th><th>Cảnh báo</th></tr></thead><tbody>' +
         K.rows.map((r) => '<tr><td class="src">' + esc(r.code + ' ' + r.name) + '</td><td class="n">' + r.kpiLines + '</td><td class="n">' + money(r.kctV) + '</td><td class="n">' + money(r.kthV) + '</td><td class="n"><b>' + (r.kctV ? pcK(r.pct) : '—') + '</b></td><td class="n">' + (r.kctV ? money(r.need80) : '—') + '</td><td class="n">' + (Math.round(r.kLeft * 100) / 100).toLocaleString('vi-VN') + '</td><td class="n">' + (r.ctV ? pc(r.pctAll) : '—') + '</td><td>' + (r.done ? pill('o', '✓ Đã về đích (≥ 80%)') : r.warn ? pill(r.lvl, r.warn) : '<span class="note">Đạt tiến độ</span>') + '</td></tr>').join('') +
-        '</tbody></table></div><div class="note" style="margin-top:6px">Shop phải clear trên 80% giá trị KPI cận date trong tháng. % hoàn thành ' + (K.sys ? 'lấy theo <b>file KPI tổng theo shop của hệ thống</b> (khớp số liệu hệ thống)' : 'tính theo giá trị (SL × Giá bán L1). File chi tiết đã làm tròn SL và giá 2 số lẻ, nên tool tính <b>an toàn</b>: chỉ tiêu lấy cao hơn một chút, đã bán lấy thấp hơn một chút (vài nghìn đồng/shop) – % HT trên tool có thể thấp hơn hệ thống một chút nhưng không bao giờ báo đạt 80% khi thực tế chưa đạt. Chọn kèm file KPI tổng theo shop để khớp đúng hệ thống') + '. Mức cần đạt tới hôm nay = 80% × tiến độ thời gian ' + pc(K.pace) + ' (ngày hiện tại / số ngày của tháng ' + esc(K.month || '') + ') = ' + pc(K.goalNow) + '. Shop dưới mức này bị đánh dấu chậm tiến độ.</div>' : '';
+        '</tbody></table></div><div class="note" style="margin-top:6px">Shop phải clear trên 80% giá trị KPI cận date trong tháng. % hoàn thành ' + (K.hyb ? 'tính với <b>chỉ tiêu</b> theo file % HT KPI ngày ' + fmtD(K.sumDate) + ' (đúng hệ thống) và <b>thực hiện</b> theo file cận date mới (làm tròn an toàn, có thể thấp hơn hệ thống vài nghìn)' : K.sys ? 'lấy theo <b>file KPI tổng theo shop của hệ thống</b> (khớp số liệu hệ thống)' : 'tính theo giá trị (SL × Giá bán L1). File chi tiết đã làm tròn SL và giá 2 số lẻ, nên tool tính <b>an toàn</b>: chỉ tiêu lấy cao hơn một chút, đã bán lấy thấp hơn một chút (vài nghìn đồng/shop) – % HT trên tool có thể thấp hơn hệ thống một chút nhưng không bao giờ báo đạt 80% khi thực tế chưa đạt. Chọn kèm file KPI tổng theo shop để khớp đúng hệ thống') + '. Mức cần đạt tới hôm nay = 80% × tiến độ thời gian ' + pc(K.pace) + ' (ngày hiện tại / số ngày của tháng ' + esc(K.month || '') + ') = ' + pc(K.goalNow) + '. Shop dưới mức này bị đánh dấu chậm tiến độ.</div>' : '';
       renderGeneric('expiry', e.lines.filter((L) => !$('eKpiOnly').checked || L.kpi), (L) => '<tr><td class="src">' + esc(shopLabel(L.shop)) + '</td><td>' + esc(L.prod) + (L.kpi ? ' <span class="pill o">KPI</span>' : '') + '<div class="note">' + (L.lot ? 'Lô ' + esc(L.lot) + ' · ' : '') + esc(L.unit) + (L.cut ? ' · Kho cắt liều' : '') + '</div></td><td>' + esc(L.hsd || '—') + '</td><td class="n">' + (Math.round(L.qtyRaw * 100) / 100).toLocaleString('vi-VN') + '</td><td class="n">' + fmt(L.tonS || 0) + '</td><td class="n">' + fmt(L.dailyS * 30) + '</td><td class="src">' +
         (L.selfQ > 0 && L.need > 0 ? '<div class="note">Shop tự bán dự kiến ' + fmt(L.selfQ) + ', cần chuyển ' + fmt(L.need) + '</div>' : '') + (L.targets.map((t) => '<div>' + esc(shopLabel(t.shop)) + ': <b>' + fmt(t.qty) + '</b> <span class="note">(bán ' + fmt(t.sold) + '/30N · có sẵn ' + fmt(t.avail) + ' · bán hết ~' + t.days + ' ngày · ' + (t.same ? 'cùng tỉnh' : 'khác tỉnh') + ')</span></div>').join('') || '') + (L.left > 0 && L.targets.length ? '<div class="note">còn ' + fmt(L.left) + ' chưa chuyển</div>' : '') + '</td><td>' + pill(decCls(L.status), L.status) + '</td></tr>',
         (L) => L.shop, (L) => L.prod + ' ' + L.lot, 'Không có dòng nào.');
@@ -3378,6 +3383,21 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     } catch (e) { msg.textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không xuất được: ' + (e.message || e.code); }
     finally { btn.disabled = false; }
   }
+  /** Ngày dữ liệu của file: lấy theo tên file hệ thống (…_YYYYMMDDhhmmss) nếu có, không thì theo ngày sửa file. */
+  const fileDate = (name, ms) => { const m = String(name || '').match(/(20\d{2})(\d{2})(\d{2})(\d{2})?(\d{2})?\d{0,2}(?!\d)/); if (m && +m[2] >= 1 && +m[2] <= 12 && +m[3] >= 1 && +m[3] <= 31) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)); return ms ? new Date(ms) : null; };
+  const dayKey = (d) => (d ? d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate() : 0);
+  const fmtD = (d) => (d ? String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear() : '');
+  function syncKpiSum() {
+    const st = $('kpiSumSt'); if (!st) return; const S = state.kpiShopSum, mon = state.surveys.expiry && state.surveys.expiry.month;
+    $('kpiSumClear').hidden = !S;
+    const E = state.kpiSumErr ? '<span style="color:var(--urgent)">⚠ ' + esc(state.kpiSumErr) + '</span><br>' : '';
+    if (!S) { st.className = 'note'; if (E) { st.innerHTML = E; return; } st.innerHTML = '<b>Không bắt buộc.</b> Nạp file % HT KPI cận date theo shop (xuất từ hệ thống) để chỉ tiêu, thực hiện, % HT đúng 100%. Không nạp: tool tính từ file theo sản phẩm (làm tròn an toàn).'; return; }
+
+    const off = mon && S.month && mon !== S.month, dd = state.parsed.expiry && state.parsed.expiry.date, old = S.date && dd && dayKey(dd) > dayKey(S.date);
+    const when = (S.date ? ' · dữ liệu ngày ' + fmtD(S.date) : '') + (S.at ? ' · nạp lúc ' + new Date(S.at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '');
+    if (!off && old) { st.className = 'note'; st.innerHTML = E + '<span style="color:var(--warn)">⚠ Đang lưu file % HT cũ: ' + esc(S.name) + when + ' – cũ hơn file cận date (ngày ' + fmtD(dd) + '). <b>Chỉ tiêu</b> lấy theo file % HT (đúng hệ thống), <b>thực hiện</b> lấy theo file cận date mới (tính an toàn). Nạp file % HT mới để đúng 100%.</span>'; return; }
+    st.className = 'note'; st.innerHTML = E + (off ? '<span style="color:var(--urgent)">⚠ ' + esc(S.name) + ' là tháng ' + esc(S.month) + ', khác tháng file cận date (' + esc(mon) + ') – không dùng.</span>' : '<span style="color:var(--ok)">✓ Đang dùng ' + esc(S.name) + ' (' + S.map.size + ' shop)' + esc(when) + ': chỉ tiêu, thực hiện, % HT KPI lấy đúng theo hệ thống. Đã lưu – lần sau mở tool tự nạp lại, sang tháng mới tự xoá.</span>');
+  }
   function kpiSummary() {
     const e = state.exp, sv = state.surveys.expiry;
     if (!e || !e.kpiFile) return null;
@@ -3388,10 +3408,11 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     const GOAL = 80, goalNow = GOAL * pace / 100;
     const by = new Map(e.byShop.map((b) => [b.shop, b]));
     const shops = [...new Set([...(state.shops || []), ...e.byShop.map((b) => b.shop)])];
-    const SS = state.kpiShopSum && !(month && state.kpiShopSum.month && month !== state.kpiShopSum.month) ? state.kpiShopSum.map : null; // file tổng theo shop của hệ thống: khớp chính xác
+    const SS = state.kpiShopSum && state.kpiShopSum.map && !(month && state.kpiShopSum.month && month !== state.kpiShopSum.month) ? state.kpiShopSum.map : null; // file tổng theo shop của hệ thống: khớp chính xác
+    const dd = state.parsed.expiry && state.parsed.expiry.date, hyb = !!(SS && dd && state.kpiShopSum.date && dayKey(dd) > dayKey(state.kpiShopSum.date)); // file % HT cũ hơn file cận date
     const rows = shops.map((s) => { let b = by.get(s) || { lines: 0, kpiLines: 0, ctV: 0, thV: 0, kctV: 0, kthV: 0, kLeft: 0, kLeftV: 0 };
-      const ss = SS && SS.get(shopNo(s)); if (ss) b = Object.assign({}, b, { kctV: ss.ct, kthV: ss.th, lines: b.lines || 1, sys: true });
-      const r = Object.assign({ code: shopNo(s), name: shopLabel(s) }, b); r.pct = ss && isFinite(ss.pct) ? ss.pct : b.kctV ? b.kthV / b.kctV * 100 : NaN; r.pctAll = b.ctV ? b.thV / b.ctV * 100 : NaN; r.need80 = Math.max(0, b.kctV * GOAL / 100 - b.kthV);
+      const ss = SS && SS.get(shopNo(s)); if (ss) b = Object.assign({}, b, hyb ? { kctV: ss.ct, sys: true } : { kctV: ss.ct, kthV: ss.th, lines: b.lines || 1, sys: true });
+      const r = Object.assign({ code: shopNo(s), name: shopLabel(s) }, b); r.pct = ss && !hyb && isFinite(ss.pct) ? ss.pct : b.kctV ? b.kthV / b.kctV * 100 : NaN; r.pctAll = b.ctV ? b.thV / b.ctV * 100 : NaN; r.need80 = Math.max(0, b.kctV * GOAL / 100 - b.kthV);
       r.warn = ''; r.lvl = '';
       if (!b.lines) { r.warn = 'Không có trong file cận date'; r.lvl = 'w'; }
       else if (!b.kctV) { r.warn = ''; }
@@ -3400,7 +3421,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       else if (r.pct < goalNow) { r.warn = 'Chậm tiến độ (' + pcK(r.pct) + ' < ' + pc(goalNow) + ')'; r.lvl = 'w'; }
       return r; }).sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
     const kct = rows.reduce((a, r) => a + r.kctV, 0), kth = rows.reduce((a, r) => a + r.kthV, 0);
-    return { rows, pace, month, sys: !!SS, goal: GOAL, goalNow, pct: kct ? kth / kct * 100 : NaN, kct, kth, need80: rows.reduce((a, r) => a + r.need80, 0) };
+    return { rows, pace, month, sys: !!SS && !hyb, hyb, sumDate: SS ? state.kpiShopSum.date : null, goal: GOAL, goalNow, pct: kct ? kth / kct * 100 : NaN, kct, kth, need80: rows.reduce((a, r) => a + r.need80, 0) };
   }
 
   /* ---------- File đặt hàng: điền vào đúng file form MTR gốc ---------- */
@@ -3873,7 +3894,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const d = new Date(), p = (n) => String(n).padStart(2, '0'), n0 = (x) => Math.round(x).toLocaleString('vi-VN');
       const late = K.rows.filter((r) => r.warn).length;
       await tableImage({ title: 'BÁO CÁO KPI CẬN DATE THEO SHOP', file: 'Bao_cao_KPI_can_date_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.png', prevId: 'expImgPrev', width: 1320,
-        sub: 'Tháng ' + (K.month || '') + ' · ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · mục tiêu clear > 80% giá trị KPI · cần đạt tới hôm nay ' + pc(K.goalNow) + ' (80% × ' + pc(K.pace) + ' tháng) · ' + (K.sys ? 'số liệu theo file KPI tổng theo shop của hệ thống' : 'tính theo SL × Giá bán L1, làm tròn an toàn (chỉ tiêu cao hơn, đã bán thấp hơn vài nghìn)'),
+        sub: 'Tháng ' + (K.month || '') + ' · ngày ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' · mục tiêu clear > 80% giá trị KPI · cần đạt tới hôm nay ' + pc(K.goalNow) + ' (80% × ' + pc(K.pace) + ' tháng) · ' + (K.sys ? 'số liệu theo file KPI tổng theo shop của hệ thống' : K.hyb ? 'chỉ tiêu theo file % HT ngày ' + fmtD(K.sumDate) + ', thực hiện theo file cận date (làm tròn an toàn)' : 'tính theo SL × Giá bán L1, làm tròn an toàn (chỉ tiêu cao hơn, đã bán thấp hơn vài nghìn)'),
         cols: [{ h: 'STT', w: 52, a: 'center' }, { h: 'Mã shop', w: 88, a: 'center' }, { h: 'Tên shop', w: 0, a: 'left' }, { h: 'Mã KPI', w: 80, a: 'right' }, { h: 'Chỉ tiêu KPI (đ)', w: 150, a: 'right' }, { h: 'Thực hiện (đ)', w: 140, a: 'right' }, { h: '% HT KPI', w: 100, a: 'right' }, { h: 'Cần thêm đạt 80%', w: 160, a: 'right' }, { h: 'Cảnh báo', w: 200, a: 'left' }],
         rows: K.rows.map((r, i) => ({ vals: [i + 1, r.code, r.name, r.kpiLines, n0(r.kctV), n0(r.kthV), r.kctV ? pcK(r.pct) : '—', r.kctV ? n0(r.need80) : '—', r.done ? '✓ Đã về đích' : r.warn ? r.warn.replace(/ \(.*\)$/, '') : (r.kctV ? 'Đạt tiến độ' : 'Không có mã KPI')], lvl: r.lvl })),
         total: ['', '', 'TOÀN KHU VỰC', K.rows.reduce((a, r) => a + r.kpiLines, 0), n0(K.kct), n0(K.kth), pcK(K.pct), n0(K.need80), [late ? late + ' shop cần nhắc' : '', K.rows.filter((r) => r.done).length ? K.rows.filter((r) => r.done).length + ' shop về đích' : ''].filter(Boolean).join(' · ')] }, msg, $('bx-expiry').closest('.actions'));
@@ -4185,8 +4206,13 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       // thẻ 1: tiến độ KPI theo shop + các nút xuất
       const kc = document.createElement('div'); kc.className = 'panel gate-hide'; kc.id = 'expKpiCard';
       kc.innerHTML = '<div class="cardhead"><div><h3>Tiến độ KPI theo shop</h3><span class="note">Mục tiêu clear &gt; 80% giá trị KPI trong tháng</span></div></div>';
-      kc.querySelector('.cardhead').appendChild(acts); kc.appendChild(kpiBox);
-      $('stats-expiry').after(kc);
+      kc.querySelector('.cardhead').appendChild(acts);
+      const ks = document.createElement('div'); ks.className = 'slotrow'; ks.id = 'kpiSumRow'; ks.style.cssText = 'align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px';
+      ks.innerHTML = '<label class="btn ghost sm">Nạp file % HT KPI theo shop<input type="file" hidden accept=".csv,.xlsx,.xls,.txt,.tsv" id="kpiSumIn"></label><button class="btn ghost sm danger" type="button" id="kpiSumClear" hidden>Bỏ file</button><span class="note" id="kpiSumSt" style="flex:1 1 300px"></span>';
+      kc.appendChild(ks); kc.appendChild(kpiBox);
+      ks.querySelector('#kpiSumIn').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) loadSurvey('kpisum', [f]); });
+      ks.querySelector('#kpiSumClear').addEventListener('click', () => { state.kpiShopSum = null; state.kpiSumErr = ''; state.svFiles.kpisum = []; saveSv('kpisum'); syncKpiSum(); refreshAll(); });
+      $('stats-expiry').after(kc); syncKpiSum();
       // thẻ 2: chi tiết lô + gợi ý chuyển
       const lh = document.createElement('div'); lh.className = 'cardhead';
       lh.innerHTML = '<div><h3>Chi tiết lô cận date và gợi ý chuyển</h3></div><div class="pills" id="expPills"></div>';
