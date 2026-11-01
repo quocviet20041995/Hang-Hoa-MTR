@@ -686,6 +686,7 @@ th.sortable.asc, th.sortable.desc { color: var(--accent); }
       <button type="button" data-tab="toa" data-grp="Khảo sát" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18H7z"/><path d="M10 8h4M10 12h4M10 16h2"/></svg><span>Khảo sát toa</span></button>
       <div class="navgrp">Team Hàng Hoá</div>
       <button type="button" data-tab="team" data-grp="Team Hàng Hoá" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3.3 2.7-5 6-5s6 1.7 6 5M14.5 14.2c.8-.3 1.6-.4 2.5-.4 2.5 0 4 1.3 4 4"/></svg><span>Tổng hợp File Đặt Hàng Miền Trung</span></button>
+      <button type="button" data-tab="fb" data-grp="Team Hàng Hoá" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v10H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg><span>Phản Hồi Ngành Hàng (File Đặt Hàng)</span></button>
       <button type="button" data-tab="report" data-grp="Team Hàng Hoá" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Báo cáo tổng hợp</span></button>
     </nav>
     <div class="sidefoot">
@@ -803,6 +804,7 @@ th.sortable.asc, th.sortable.desc { color: var(--accent); }
     <section class="tp" id="tp-price"></section>
     <section class="tp" id="tp-toa"></section>
     <section class="tp" id="tp-team"></section>
+    <section class="tp" id="tp-fb"></section>
     <section class="tp" id="tp-report">
       <div class="panel"><h2>Báo cáo tổng hợp</h2><p class="note" style="margin:0 0 10px;max-width:80ch">Gom kết quả các mục đã tải thành báo cáo 3 phần theo mẫu: Quyết định điều phối, Báo cáo theo shop, Cảnh báo vi phạm. Tình trạng đúng giờ, trễ hạn, chưa nộp tính từ các file khảo sát đã tải.</p><div class="params"><label>Hạn nộp báo cáo (giờ:phút)<input type="text" id="rDeadline" placeholder="vd 11:00" maxlength="5"></label></div></div>
     <div id="repSec" style="display:flex;flex-direction:column;gap:12px">
@@ -2715,7 +2717,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
 
   /* ===================== các tab xử lý riêng ===================== */
   let curTab = 'alloc', rt = null;
-  const TABS = ['alloc', 'order', 'expiry', 'newsku', 'price', 'toa', 'team', 'report'];
+  const TABS = ['alloc', 'order', 'expiry', 'newsku', 'price', 'toa', 'team', 'fb', 'report'];
   const KINDS = ['price', 'toa', 'newsku', 'order', 'expiry', 'kpi'];
   const fileInput = (k, label, multiple, hint) =>
     '<div class="slotrow"><label class="btn sm">' + label + '<input type="file" hidden accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt" data-k="' + k + '"' + (multiple ? ' multiple' : '') + '></label>' +
@@ -3497,14 +3499,16 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       (src.rows || []).forEach(([c, n, a]) => { if (!a) return; const k = codeKey(c); if (k && !byCode.has(k)) byCode.set(k, a); const k1 = nameKey(n), k2 = nameKey2(n); if (k1 && !byName.has(k1)) byName.set(k1, a); if (k2 && !byName2.has(k2)) byName2.set(k2, a); });
       const shopsOf = new Map(); (src.rows || []).forEach(([, , a]) => { if (a) shopsOf.set(a, (shopsOf.get(a) || 0) + 1); });
       const kvAll = [...new Set(kvList.map(([kv, , nm]) => kv + ' - ' + nm))];
-      ASM = { src: src.src, at: src.at || '', shopsOf, kvAll, noKv: [...noKv], kvFromFile: !!(src.kv && src.kv.length), n: (src.rows || []).length, asmN: new Set((src.rows || []).map((r) => r[2])).size, byCode, byName, byName2 };
+      const nameOfCode = new Map(), codeOfName = new Map(), codeOfName2 = new Map(); // tra ngược mã shop <-> tên shop
+      (src.rows || []).forEach(([c, n]) => { const k = codeKey(c); if (k && n && !nameOfCode.has(k)) nameOfCode.set(k, n); if (k && n) { const k1 = nameKey(n), k2 = nameKey2(n); if (k1 && !codeOfName.has(k1)) codeOfName.set(k1, String(c).replace(/\.0+$/, '').trim()); if (k2 && !codeOfName2.has(k2)) codeOfName2.set(k2, String(c).replace(/\.0+$/, '').trim()); } });
+      ASM = { src: src.src, at: src.at || '', shopsOf, nameOfCode, codeOfName, codeOfName2, kvAll, noKv: [...noKv], kvFromFile: !!(src.kv && src.kv.length), n: (src.rows || []).length, asmN: new Set((src.rows || []).map((r) => r[2]).filter(Boolean)).size, byCode, byName, byName2 };
     }
     const asmOf = (code, name) => (ASM && (ASM.byCode.get(codeKey(code)) || ASM.byName.get(nameKey(name)) || ASM.byName2.get(nameKey2(name)))) || '';
     function asmInit() { let u = null; try { u = JSON.parse(localStorage.getItem(AK) || 'null'); } catch (e) { u = null; } if (u && u.rows && u.rows.length) asmBuild(u); else ASM = null; }
     function asmLine() {
       const on = !!(ASM && ASM.n); $('teamAsmBadge').textContent = on ? ASM.n + ' shop' : 'Chưa có file'; $('teamAsmBadge').className = 'badge ' + (on ? 'ok' : 'off');
       $('teamAsmLine').innerHTML = on ? 'Đang dùng: <b>' + esc(ASM.src) + '</b> · ' + ASM.n + ' shop, ' + ASM.asmN + ' ASM' + (ASM.at ? ' · nạp ngày ' + esc(ASM.at) : '') + '. Sang tháng mới chọn lại file mới.' : 'Chưa có file – cột ASM trong file xuất sẽ để trống.';
-      $('teamAsmReset').hidden = !on; }
+      $('teamAsmReset').hidden = !on; if (window.__fbRefresh) window.__fbRefresh(); }
     /** Đọc file chia shop: sheet có cột Mã cửa hàng / Tên cửa hàng + cột ASM (ưu tiên cột ASM mới nhất, vd "Tên nhân viên ASM từ 01/10/2026"). */
     function parseKvSheet(aoas) {
       let best = [];
@@ -3532,7 +3536,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
           if ((iC < 0 && iN < 0) || !asmCols.length) continue;
           const pick = (asmCols.filter(([c]) => /\btừ\b/.test(c)).pop() || asmCols[asmCols.length - 1])[1];
           const rows = [];
-          for (let i = h + 1; i < a.length; i++) { const r = a[i] || [], c = iC >= 0 ? String(r[iC] == null ? '' : r[iC]).trim() : '', n = iN >= 0 ? String(r[iN] == null ? '' : r[iN]).trim() : '', v = String(r[pick] == null ? '' : r[pick]).trim(); if ((c || n) && v) rows.push([c, n, v]); }
+          for (let i = h + 1; i < a.length; i++) { const r = a[i] || [], c = iC >= 0 ? String(r[iC] == null ? '' : r[iC]).trim() : '', n = iN >= 0 ? String(r[iN] == null ? '' : r[iN]).trim() : '', v = String(r[pick] == null ? '' : r[pick]).trim(); if (c || n) rows.push([c, n, v]); /* giữ cả shop chưa có ASM để tra mã/tên shop */ }
           if (!best || rows.length > best.length) best = rows;
           break;
         }
@@ -3588,9 +3592,20 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       return { name, rows, notes };
     }
     function merge() {
-      const N = new Map(), C = new Map(), shopFiles = new Map(); let dupN = 0;
+      const N = new Map(), C = new Map(), shopFiles = new Map(), fills = new Map(); let dupN = 0;
       T.files.filter((f) => !f.err).forEach((f) => {
-        f.rows.forEach((r) => {
+        f.rows.forEach((r0) => {
+          // mã shop / tên shop theo file chia shop: thiếu mã -> tra theo tên; thiếu tên hoặc tên chưa chuẩn -> lấy tên chuẩn theo mã
+          let r = r0;
+          if (ASM) {
+            const c = r0.shopCode || ASM.codeOfName.get(nameKey(r0.shop)) || ASM.codeOfName2.get(nameKey2(r0.shop)) || '';
+            const std = c ? ASM.nameOfCode.get(codeKey(c)) : '', n = std || r0.shop || '';
+            if (c !== r0.shopCode || n !== r0.shop) {
+              r = Object.assign({}, r0, { shopCode: c, shop: n });
+              const key = c + '|' + n + '|' + (r0.shopCode || '') + '|' + (r0.shop || '');
+              if (!fills.has(key)) fills.set(key, { file: f.name, code: c, name: n, addC: c !== r0.shopCode, addN: !r0.shop && !!n, fixN: !!r0.shop && n !== r0.shop, from: (r0.shopCode ? r0.shopCode + ' ' : '') + (r0.shop || '(trống)') });
+            }
+          }
           const shopKey = r.shopCode || norm(r.shop); if (!shopFiles.has(shopKey)) shopFiles.set(shopKey, new Set()); shopFiles.get(shopKey).add(f.name);
           const k = shopKey + '\u0000' + r.code, M = r.type === 'cut' ? C : N, o = M.get(k);
           if (!o) { M.set(k, Object.assign({}, r)); return; }
@@ -3600,7 +3615,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       });
       const multi = [...shopFiles.entries()].filter(([, s]) => s.size > 1);
       const sortF = (a, b) => (a.shopCode < b.shopCode ? -1 : a.shopCode > b.shopCode ? 1 : a.code < b.code ? -1 : 1);
-      T.merged = { normal: [...N.values()].sort(sortF), cut: [...C.values()].sort(sortF), shops: shopFiles.size, multi, dupN };
+      T.merged = { normal: [...N.values()].sort(sortF), cut: [...C.values()].sort(sortF), shops: shopFiles.size, multi, dupN, fills: [...fills.values()] };
     }
     const fmt = (n) => Number(n || 0).toLocaleString('vi-VN');
     function render() {
@@ -3625,6 +3640,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const w = []; if (M.multi.length) w.push('<b>' + M.multi.length + ' shop có trong nhiều file</b> (có thể 2 ASM cùng gửi, hoặc nạp trùng file): ' + M.multi.slice(0, 12).map(([s, fs]) => esc(s) + ' (' + [...fs].length + ' file)').join(', ') + (M.multi.length > 12 ? '…' : '') + '. Hàng thường trùng mã đã lấy dòng SL cao nhất, cắt liều đã cộng lại.');
       if (ASM) { const R0 = asmReport(M); if (R0.noKvL.length) w.push('<b>' + R0.noKvL.length + ' ASM chưa có mã KV</b> (không có trong danh sách khu vực' + (ASM.kvFromFile ? ' của file chia shop' : '') + '): ' + R0.noKvL.map(esc).join(', ') + '.'); if (R0.noneL.length) w.push('<b>' + R0.noneL.length + ' ASM chưa có mã đặt hàng</b>: ' + R0.noneL.map(esc).join(', ') + '.'); }
       if (!ASM) w.push('<b>Chưa nạp file chia shop ASM</b> – cột ASM trong file xuất sẽ để trống. Chọn file Mtr_Chia_shop tháng này ở ô phía trên.');
+      if (M.fills.length) { const fc = M.fills.filter((x) => x.addC).length, fn = M.fills.filter((x) => x.addN).length, fx = M.fills.filter((x) => x.fixN).length; w.push('<b>Tool đã tự sửa theo file chia shop</b>: ' + [fc ? 'điền ' + fc + ' mã shop còn thiếu' : '', fn ? 'điền ' + fn + ' tên shop còn thiếu' : '', fx ? 'chuẩn hoá ' + fx + ' tên shop theo mã shop' : ''].filter(Boolean).join(', ') + ' – ' + M.fills.slice(0, 10).map((x) => esc(x.from) + ' → ' + esc((x.code || '?') + ' ' + (x.name || ''))).join('; ') + (M.fills.length > 10 ? '…' : '') + '.'); }
       if (ASM && moved.size) w.push('<b>' + moved.size + ' shop chưa có ASM trong file chia shop</b> (shop mới / pending) – tool lấy ASM theo file đặt hàng gửi lên: ' + [...moved.values()].slice(0, 12).map((m) => esc(m.shop) + ' → ' + esc(m.to) + (m.from ? ' (file chia shop ghi "' + esc(m.from) + '")' : '')).join(', ') + (moved.size > 12 ? '…' : '') + '.');
       if (!ASM) { /* đã báo ở trên */ } else if (noAsm.size) w.push('<b>' + noAsm.size + ' shop chưa dò được ASM</b> (không có trong file chia shop' + (ASM && ASM.src ? ' ' + esc(ASM.src) : '') + ', cột ASM để trống): ' + [...noAsm.entries()].slice(0, 12).map(([c, n]) => esc(c + (n && n !== c ? ' ' + n : ''))).join(', ') + (noAsm.size > 12 ? '…' : '') + '. Nạp file chia shop mới hơn nếu có.');
       const bad = T.files.filter((f) => f.err); if (bad.length) w.push('<b>' + bad.length + ' file không đọc được</b>: ' + bad.map((f) => esc(f.name)).join(', '));
@@ -3708,6 +3724,209 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
           total: ['', 'TOÀN MIỀN', R.tot ? R.sh + '/' + R.tot : R.sh, fmt(R.n), fmt(R.c), fmt(R.n + R.c), fmt(R.q), R.none ? R.none + ' ASM chưa có mã đặt hàng' : ''] }, msg, $('teamAsmImg').closest('.actions'));
       } catch (e) { msg.textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không tạo được ảnh: ' + (e.message || e.code); }
     });
+    window.__teamAsm = { get: () => ASM, asmOf, kvNum };
+    asmLine(); render();
+  })();
+  /* =================== PHẢN HỒI NGÀNH HÀNG (FILE ĐẶT HÀNG): thống kê theo ASM / theo shop =================== */
+  (function () {
+    const tp = $('tp-fb'); if (!tp) return;
+    const TA = window.__teamAsm || {};
+    const F = { file: null, rows: { normal: [], cut: [] }, type: 'normal', asmSel: '' };
+    const fmtN = (n) => Number(n || 0).toLocaleString('vi-VN');
+    const NOASM = 'Chưa có ASM';
+    // 3 lý do do shop (đủ tồn / không bán) – cột của bảng thống kê
+    const KEYS = [['sb60', 'Tồn shop đủ SB60N', /sb\s*60/i], ['sb30', 'Tồn shop đủ SB30N', /sb\s*30/i], ['nosale', 'Shop có tồn, 30N gần nhất không phát sinh số bán', /không\s*phát\s*sinh\s*số\s*bán/i]];
+    const keyOf = (fb) => { const k = KEYS.find(([, , re]) => re.test(fb || '')); return k ? k[0] : ''; };
+    const LS = 'mtr_fb_title';
+    let title0 = ''; try { title0 = localStorage.getItem(LS) || ''; } catch (e) { /* bỏ qua */ }
+    if (!title0) { const d = new Date(); title0 = 'T' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear(); }
+    tp.innerHTML =
+      '<div class="srccard" id="fbAsmCard" style="margin-bottom:12px"><div class="srchead"><span class="sico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 19c0-3.3 2.7-5 6-5s6 1.7 6 5M16 11h5M18.5 8.5v5"/></svg></span><div class="stt"><b>File chia shop ASM</b><span>Dùng chung với mục Tổng hợp File Đặt Hàng Miền Trung · dò ASM theo mã shop</span></div><span class="badge off" id="fbAsmBadge">Chưa có file</span></div>' +
+      '<div class="srcbody"><div class="slotrow" style="align-items:center;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="fbAsmPick" type="button">Chọn file chia shop</button><span class="note" id="fbAsmLine" style="flex:1 1 260px"></span></div></div></div>' +
+      '<div class="srccard" id="fbCard"><div class="srchead"><span class="sico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v10H8l-4 4z"/></svg></span><div class="stt"><b>File phản hồi đặt hàng của ngành hàng</b><span>Excel (.xlsb / .xlsx) · sheet Hàng Thường + Cắt liều (cột Mã Shop, Mã SP, Phản hồi…)</span></div><span class="badge off" id="fbBadge">Chưa có file</span></div>' +
+      '<div class="srcbody" style="align-items:center;text-align:center;border:1.5px dashed var(--accent-line);border-radius:11px;padding:18px 14px"><span class="note">Kéo thả file vào đây, hoặc</span><div class="slotrow" style="justify-content:center"><label class="btn">Chọn file phản hồi<input type="file" id="fbIn" hidden accept=".xlsb,.xlsx,.xls,.xlsm"></label><button class="btn ghost danger" id="fbClear" type="button" hidden>Bỏ file</button></div><div class="st" id="fbSt" style="text-align:left;width:100%"></div></div></div>' +
+      '<div id="fbRes" hidden>' +
+      '<div class="panel" style="margin-top:12px"><div class="slotrow" style="align-items:center;gap:10px;flex-wrap:wrap"><span class="seg" id="fbSeg"><button type="button" class="segb on" data-t="normal">Hàng thường</button><button type="button" class="segb" data-t="cut">Cắt liều</button></span>' +
+      '<label class="note" style="display:flex;align-items:center;gap:6px">Tên đợt (ghi trên báo cáo) <input id="fbTitle" type="text" style="width:190px" value="' + esc(title0) + '"></label><span style="flex:1"></span><span class="msg" id="fbMsg" role="status"></span><button class="btn ghost" id="fbZip" type="button">Xuất file gửi từng ASM (ZIP)</button><button class="btn" id="fbXls" type="button">Tải file báo cáo (Excel)</button></div></div>' +
+      '<div class="warnline" id="fbWarn" hidden></div>' +
+      '<div class="stats" id="fbStats"></div>' +
+      '<div class="panel rescard"><div class="cardhead"><div><h3 id="fbAsmH">Thống kê theo ASM</h3><span class="note">Số mã hàng ngành hàng không chia vì shop còn tồn / không bán · sắp xếp theo tổng giảm dần</span></div><div class="actions"><button class="btn ghost" id="fbAsmImg" type="button">Xuất ảnh theo ASM</button></div></div>' +
+      '<div class="tablewrap" style="max-height:560px"><table><thead><tr><th class="n" style="width:50px">STT</th><th style="min-width:230px">ASM</th><th class="n">Số shop</th><th class="n">Tồn shop đủ SB60N</th><th class="n">Tồn shop đủ SB30N</th><th class="n">Shop có tồn, 30N không phát sinh số bán</th><th class="n">Tổng</th></tr></thead><tbody id="fbAsmBody"></tbody><tfoot id="fbAsmFoot"></tfoot></table></div></div>' +
+      '<div class="panel rescard"><div class="cardhead"><div><h3 id="fbShopH">Thống kê theo shop</h3><span class="note">Chọn ASM để xem / xuất ảnh shop của ASM đó · "Tất cả ASM": xuất ZIP, mỗi ASM 1 ảnh</span></div><div class="actions"><select id="fbAsmSel"></select><button class="btn ghost" id="fbShopImg" type="button">Xuất ảnh theo shop</button></div></div>' +
+      '<div class="tablewrap" style="max-height:560px"><table><thead><tr><th class="n" style="width:50px">STT</th><th>Mã shop</th><th style="min-width:220px">Tên shop</th><th>ASM</th><th class="n">SB60N</th><th class="n">SB30N</th><th class="n">30N không bán</th><th class="n">Tổng</th><th class="n">Tổng mã phản hồi</th></tr></thead><tbody id="fbShopBody"></tbody><tfoot id="fbShopFoot"></tfoot></table></div></div>' +
+      '<details class="optdet"><summary><span class="chev"></span><b>Tổng hợp theo lý do phản hồi</b> <span class="note" id="fbRsnSum"></span></summary><div class="optbody"><div class="tablewrap"><table><thead><tr><th>Phản hồi</th><th class="n">Trường hợp</th><th class="n">% trường hợp</th></tr></thead><tbody id="fbRsnBody"></tbody><tfoot id="fbRsnFoot"></tfoot></table></div><div class="actions" style="margin-top:8px"><button class="btn ghost" id="fbRsnImg" type="button">Xuất ảnh lý do</button></div></div></details>' +
+      '</div>';
+    const asmOf = (code, name) => (TA.get && TA.get() ? TA.asmOf(code, name) || '' : '');
+    const kvNum = (a) => (TA.kvNum ? TA.kvNum(a) : 1e9);
+    function asmLine() {
+      const A = TA.get && TA.get();
+      $('fbAsmBadge').textContent = A ? A.n + ' shop' : 'Chưa có file'; $('fbAsmBadge').className = 'badge ' + (A ? 'ok' : 'off');
+      $('fbAsmLine').innerHTML = A ? 'Đang dùng: <b>' + esc(A.src) + '</b> (' + A.n + ' shop, ' + A.asmN + ' ASM) – cùng file đã nạp ở mục Tổng hợp File Đặt Hàng Miền Trung.' : '<span style="color:var(--warn)">Chưa có file chia shop – tất cả shop sẽ là "' + NOASM + '". Chọn file Mtr_Chia_shop tháng này.</span>';
+    }
+    /** đọc file phản hồi: mọi sheet có cột Mã Shop + Phản hồi; sheet tên "cắt liều" là cắt liều, còn lại là hàng thường (bỏ sheet PV/pivot) */
+    function parseFb(aoas) {
+      const out = { normal: [], cut: [] };
+      aoas.forEach((a) => {
+        for (let h = 0; h < Math.min(10, a.length); h++) {
+          const head = (a[h] || []).map(norm), I = (re) => head.findIndex((c) => re.test(c));
+          const iS = I(/^mã\s*shop$/), iFb = I(/^phản\s*hồi$/); if (iS < 0 || iFb < 0) continue;
+          const iN = I(/^tên\s*shop$/), iC = I(/^mã\s*(sp|sản phẩm)$/), iP = I(/^tên\s*(sp|sản phẩm)$/), iQ = I(/^số\s*lượng$/), iU = I(/^đvt/), iG = I(/^ngành/), iB = I(/^sl\s*book$/), iT = I(/^slton$/), iTd = I(/^sltondukien$/), iB30 = I(/^slban30$/), iA = I(/^thuộc tính/);
+          const t = /cắt\s*liều/i.test(a.sheetName || '') ? 'cut' : 'normal', S = (r, i) => (i >= 0 && r[i] != null ? String(r[i]).trim() : '');
+          for (let i = h + 1; i < a.length; i++) { const r = a[i] || [], sc = S(r, iS).replace(/\.0+$/, ''), fb = S(r, iFb); if (!sc && !fb) continue;
+            out[t].push({ shopCode: sc, shop: S(r, iN), code: fixCode(S(r, iC)), name: S(r, iP), qty: r[iQ], unit: S(r, iU), book: r[iB], ton: r[iT], tonDk: r[iTd], ban30: r[iB30], fb, nganh: S(r, iG) || 'KHÁC', attr: S(r, iA) === '0' ? '' : S(r, iA) }); }
+          break;
+        }
+      });
+      return out.normal.length || out.cut.length ? out : null;
+    }
+    function compute(type) {
+      const L = F.rows[type] || [], cache = new Map(), A = TA.get && TA.get();
+      L.forEach((r) => { const k = r.shopCode + '\u0000' + r.shop; if (!cache.has(k)) cache.set(k, asmOf(r.shopCode, r.shop) || NOASM); r.asm = cache.get(k); });
+      const byA = new Map(), byS = new Map(), rsn = new Map();
+      L.forEach((r) => {
+        const k = keyOf(r.fb);
+        if (!byA.has(r.asm)) byA.set(r.asm, { asm: r.asm, sh: new Set(), sb60: 0, sb30: 0, nosale: 0 }); const a = byA.get(r.asm); a.sh.add(r.shopCode || r.shop); if (k) a[k]++;
+        const sk = r.shopCode || r.shop; if (!byS.has(sk)) byS.set(sk, { code: r.shopCode, shop: r.shop, asm: r.asm, sb60: 0, sb30: 0, nosale: 0, all: 0 }); const s = byS.get(sk); s.all++; if (k) s[k]++;
+        if (!rsn.has(r.fb)) rsn.set(r.fb, { fb: r.fb, n: 0, ng: new Map() }); const e = rsn.get(r.fb); e.n++; e.ng.set(r.nganh, (e.ng.get(r.nganh) || 0) + 1);
+      });
+      const tot = (x) => x.sb60 + x.sb30 + x.nosale;
+      const asmRows = [...byA.values()].map((x) => Object.assign(x, { shops: x.sh.size, tot: tot(x) })).sort((x, y) => (x.asm === NOASM) - (y.asm === NOASM) || y.tot - x.tot || kvNum(x.asm) - kvNum(y.asm));
+      const shopRows = [...byS.values()].map((x) => Object.assign(x, { tot: tot(x) })).sort((x, y) => (x.asm === NOASM) - (y.asm === NOASM) || kvNum(x.asm) - kvNum(y.asm) || (x.asm < y.asm ? -1 : x.asm > y.asm ? 1 : 0) || y.tot - x.tot);
+      const rsnRows = [...rsn.values()].sort((x, y) => y.n - x.n);
+      const sum = (k) => asmRows.reduce((p, x) => p + x[k], 0);
+      return { L, asmRows, shopRows, rsnRows, total: { shops: sum('shops'), sb60: sum('sb60'), sb30: sum('sb30'), nosale: sum('nosale'), tot: sum('tot') }, noAsm: asmRows.find((x) => x.asm === NOASM), hasAsm: !!A };
+    }
+    const tName = () => (F.type === 'cut' ? 'Cắt liều' : 'Hàng Thường');
+    const titleTxt = () => String($('fbTitle').value || '').trim();
+    const shopsOf = (R) => (F.asmSel ? R.shopRows.filter((x) => x.asm === F.asmSel) : R.shopRows);
+    function render() {
+      $('fbClear').hidden = !F.file; $('fbBadge').textContent = F.file ? 'Đã nạp' : 'Chưa có file'; $('fbBadge').className = 'badge ' + (F.file ? 'ok' : 'off');
+      if (!F.file) { $('fbRes').hidden = true; return; }
+      $('fbRes').hidden = false;
+      document.querySelectorAll('#fbSeg button').forEach((b) => b.classList.toggle('on', b.dataset.t === F.type));
+      const R = compute(F.type); F.R = R;
+      $('fbStats').innerHTML = stat(fmtN(R.L.length), 'mã phản hồi (' + tName().toLowerCase() + ')') + stat(fmtN(R.total.shops), 'shop') + stat(fmtN(R.total.tot), 'mã shop còn tồn / không bán', 'w') + stat(fmtN(R.asmRows.filter((x) => x.asm !== NOASM).length), 'ASM');
+      const w = []; if (!R.hasAsm) w.push('<b>Chưa nạp file chia shop</b> – chưa chia được theo ASM.'); else if (R.noAsm) w.push('<b>' + R.noAsm.shops + ' shop chưa có ASM</b> trong file chia shop: ' + R.shopRows.filter((x) => x.asm === NOASM).slice(0, 12).map((x) => esc(x.code + ' ' + x.shop)).join(', ') + (R.noAsm.shops > 12 ? '…' : '') + '.');
+      $('fbWarn').hidden = !w.length; $('fbWarn').innerHTML = w.join('<br>');
+      const tt = titleTxt();
+      $('fbAsmH').textContent = 'Thống kê số lượng mã hàng theo ASM – ' + tName() + (tt ? ' · ' + tt : '');
+      $('fbAsmBody').innerHTML = R.asmRows.map((x, i) => '<tr' + (x.asm === NOASM ? ' style="color:var(--muted)"' : '') + '><td class="n">' + (i + 1) + '</td><td style="white-space:nowrap">' + esc(x.asm) + '</td><td class="n">' + x.shops + '</td><td class="n">' + fmtN(x.sb60) + '</td><td class="n">' + fmtN(x.sb30) + '</td><td class="n">' + fmtN(x.nosale) + '</td><td class="n"><b>' + fmtN(x.tot) + '</b></td></tr>').join('');
+      $('fbAsmFoot').innerHTML = '<tr style="font-weight:700"><td></td><td>Tổng cộng</td><td class="n">' + fmtN(R.total.shops) + '</td><td class="n">' + fmtN(R.total.sb60) + '</td><td class="n">' + fmtN(R.total.sb30) + '</td><td class="n">' + fmtN(R.total.nosale) + '</td><td class="n">' + fmtN(R.total.tot) + '</td></tr>';
+      const asms = R.asmRows.map((x) => x.asm); if (F.asmSel && !asms.includes(F.asmSel)) F.asmSel = '';
+      $('fbAsmSel').innerHTML = '<option value="">Tất cả ASM</option>' + asms.map((a) => '<option' + (a === F.asmSel ? ' selected' : '') + '>' + esc(a) + '</option>').join('');
+      const SR = shopsOf(R);
+      $('fbShopH').textContent = 'Thống kê theo shop – ' + tName() + (F.asmSel ? ' · ' + F.asmSel : '');
+      $('fbShopBody').innerHTML = SR.map((x, i) => '<tr><td class="n">' + (i + 1) + '</td><td>' + esc(x.code) + '</td><td>' + esc(x.shop) + '</td><td class="note" style="white-space:nowrap">' + esc(x.asm) + '</td><td class="n">' + fmtN(x.sb60) + '</td><td class="n">' + fmtN(x.sb30) + '</td><td class="n">' + fmtN(x.nosale) + '</td><td class="n"><b>' + fmtN(x.tot) + '</b></td><td class="n">' + fmtN(x.all) + '</td></tr>').join('');
+      const ss = (k) => SR.reduce((p, x) => p + x[k], 0);
+      $('fbShopFoot').innerHTML = '<tr style="font-weight:700"><td></td><td></td><td>Tổng cộng (' + SR.length + ' shop)</td><td></td><td class="n">' + fmtN(ss('sb60')) + '</td><td class="n">' + fmtN(ss('sb30')) + '</td><td class="n">' + fmtN(ss('nosale')) + '</td><td class="n">' + fmtN(ss('tot')) + '</td><td class="n">' + fmtN(ss('all')) + '</td></tr>';
+      const N = R.L.length || 1, red = (fb) => /không\s*xử\s*lý/i.test(fb);
+      $('fbRsnSum').textContent = '· ' + R.rsnRows.length + ' lý do';
+      $('fbRsnBody').innerHTML = R.rsnRows.map((x) => '<tr' + (red(x.fb) ? ' style="color:var(--urgent)"' : '') + '><td>' + esc(x.fb || '(trống)') + (/hết\s*tồn/i.test(x.fb) ? '<div class="note">' + [...x.ng.entries()].sort((a, b) => b[1] - a[1]).map(([g, n]) => esc(g) + ': ' + fmtN(n)).join(' · ') + '</div>' : '') + '</td><td class="n">' + fmtN(x.n) + '</td><td class="n">' + (x.n / N * 100).toFixed(2).replace('.', ',') + '%</td></tr>').join('');
+      $('fbRsnFoot').innerHTML = '<tr style="font-weight:700"><td>Tổng cộng</td><td class="n">' + fmtN(R.L.length) + '</td><td class="n">100%</td></tr>';
+    }
+    async function load(f) {
+      if (typeof XLSX === 'undefined') { $('fbSt').textContent = 'Chưa tải được thư viện đọc Excel. Kiểm tra mạng.'; return; }
+      busy('Đang đọc file phản hồi ' + f.name + '…'); await new Promise((r) => setTimeout(r, 30));
+      try {
+        const p = parseFb(await readAoas(f));
+        if (!p) { $('fbSt').className = 'st bad'; $('fbSt').textContent = f.name + ': không thấy sheet phản hồi (cần cột Mã Shop và Phản hồi).'; }
+        else { F.file = f.name; F.rows = p; $('fbSt').className = 'st ok'; $('fbSt').textContent = f.name + ': ' + fmtN(p.normal.length) + ' dòng hàng thường, ' + fmtN(p.cut.length) + ' dòng cắt liều.'; }
+      } catch (e) { $('fbSt').className = 'st bad'; $('fbSt').textContent = 'Không mở được file: ' + (e.message || e); }
+      idle(); render();
+    }
+    $('fbIn').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) load(f); });
+    const dz = $('fbCard'); ['dragover', 'dragenter'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, () => dz.classList.remove('over')));
+    dz.addEventListener('drop', (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) load(f); });
+    $('fbClear').addEventListener('click', () => { F.file = null; F.rows = { normal: [], cut: [] }; $('fbSt').textContent = ''; $('fbSt').className = 'st'; render(); });
+    $('fbAsmPick').addEventListener('click', () => { const i = $('teamAsmIn'); if (i) i.click(); });
+    $('fbSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; F.type = b.dataset.t; render(); });
+    $('fbAsmSel').addEventListener('change', (e) => { F.asmSel = e.target.value; render(); });
+    $('fbTitle').addEventListener('input', () => { try { localStorage.setItem(LS, $('fbTitle').value); } catch (e) { /* bỏ qua */ } render(); });
+    const stamp = () => { const d = new Date(), p = (x) => String(x).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()); };
+    const slug = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const asmImgOpts = (R) => ({ title: 'THỐNG KÊ SỐ LƯỢNG MÃ HÀNG THEO ASM – PHẢN HỒI ĐẶT HÀNG' + (titleTxt() ? ' ' + titleTxt().toUpperCase() : '') + ' (' + tName() + ')', file: 'Phan_hoi_theo_ASM_' + slug(tName()) + '_' + stamp() + '.png', width: 1240,
+      sub: '1. Tổng hợp theo ASM (số mã hàng) · file ' + F.file + ((TA.get && TA.get()) ? ' · chia shop theo ' + TA.get().src : ''),
+      cols: [{ h: 'STT', w: 52, a: 'center' }, { h: 'ASM', w: 0, a: 'left' }, { h: 'Số shop', w: 100, a: 'right' }, { h: 'Tồn shop đủ SB60N', w: 170, a: 'right' }, { h: 'Tồn shop đủ SB30N', w: 170, a: 'right' }, { h: 'Shop có tồn, 30N không PS số bán', w: 300, a: 'right' }, { h: 'Tổng', w: 110, a: 'right' }],
+      rows: R.asmRows.map((x, i) => ({ vals: [i + 1, x.asm, x.shops, fmtN(x.sb60), fmtN(x.sb30), fmtN(x.nosale), fmtN(x.tot)], lvl: x.asm === NOASM ? 'w' : '' })),
+      total: ['', 'Tổng cộng', fmtN(R.total.shops), fmtN(R.total.sb60), fmtN(R.total.sb30), fmtN(R.total.nosale), fmtN(R.total.tot)] });
+    const shopImgOpts = (R, asm) => { const SR = R.shopRows.filter((x) => x.asm === asm), s = (k) => SR.reduce((p, x) => p + x[k], 0);
+      return { title: 'PHẢN HỒI ĐẶT HÀNG' + (titleTxt() ? ' ' + titleTxt().toUpperCase() : '') + ' (' + tName() + ') – ' + asm.toUpperCase(), file: 'Phan_hoi_theo_shop_' + slug(tName()) + '_' + slug(asm) + '_' + stamp() + '.png', width: 1240,
+        sub: 'Theo shop (số mã hàng ngành hàng không chia vì shop còn tồn / không bán) · file ' + F.file,
+        cols: [{ h: 'STT', w: 52, a: 'center' }, { h: 'Mã shop', w: 90, a: 'center' }, { h: 'Tên shop', w: 0, a: 'left' }, { h: 'Tồn shop đủ SB60N', w: 160, a: 'right' }, { h: 'Tồn shop đủ SB30N', w: 160, a: 'right' }, { h: 'Shop có tồn, 30N không PS số bán', w: 300, a: 'right' }, { h: 'Tổng', w: 100, a: 'right' }],
+        rows: SR.map((x, i) => ({ vals: [i + 1, x.code, x.shop, fmtN(x.sb60), fmtN(x.sb30), fmtN(x.nosale), fmtN(x.tot)] })),
+        total: ['', '', 'Tổng cộng (' + SR.length + ' shop)', fmtN(s('sb60')), fmtN(s('sb30')), fmtN(s('nosale')), fmtN(s('tot'))] }; };
+    const err = (e) => ($('fbMsg').textContent = e && e.code === 'declined' ? 'Bạn đã huỷ lưu file.' : 'Không tạo được: ' + (e.message || e.code || e));
+    $('fbAsmImg').addEventListener('click', async () => { if (!F.R) return; try { await tableImage(asmImgOpts(F.R), $('fbMsg'), $('fbAsmImg').closest('.actions')); } catch (e) { err(e); } });
+    $('fbShopImg').addEventListener('click', async () => {
+      const R = F.R; if (!R) return;
+      try {
+        if (F.asmSel) { await tableImage(shopImgOpts(R, F.asmSel), $('fbMsg'), $('fbShopImg').closest('.actions')); return; }
+        if (typeof JSZip === 'undefined') { $('fbMsg').textContent = 'Chưa tải được thư viện nén ZIP.'; return; }
+        const zip = new JSZip(), asms = R.asmRows.map((x) => x.asm); let i = 0;
+        for (const a of asms) { i++; busy('Đang tạo ảnh ' + i + '/' + asms.length + ': ' + a); await new Promise((r) => setTimeout(r, 10)); const o = shopImgOpts(R, a); o.returnBlob = true; zip.file(o.file, await tableImage(o)); }
+        busy('Đang nén ZIP…'); const fn = 'Phan_hoi_theo_shop_' + slug(tName()) + '_' + stamp() + '.zip';
+        await saveFile(fn, await zip.generateAsync({ type: 'blob' })); $('fbMsg').textContent = 'Đã tạo ' + fn + ' · ' + asms.length + ' ảnh (mỗi ASM 1 ảnh).';
+      } catch (e) { err(e); } finally { idle(); }
+    });
+    $('fbRsnImg').addEventListener('click', async () => { const R = F.R; if (!R) return; const N = R.L.length || 1;
+      try { await tableImage({ title: 'PHẢN HỒI ' + tName().toUpperCase() + (titleTxt() ? ' – ' + titleTxt().toUpperCase() : ''), file: 'Phan_hoi_ly_do_' + slug(tName()) + '_' + stamp() + '.png', width: 1100, sub: 'Tổng hợp theo lý do phản hồi của ngành hàng · file ' + F.file,
+        cols: [{ h: 'Phản hồi', w: 0, a: 'left' }, { h: 'Trường hợp', w: 140, a: 'right' }, { h: '% Trường hợp', w: 150, a: 'right' }],
+        rows: R.rsnRows.map((x) => ({ vals: [x.fb || '(trống)', fmtN(x.n), (x.n / N * 100).toFixed(2).replace('.', ',') + '%'], lvl: /không\s*xử\s*lý/i.test(x.fb) ? 'u' : '' })),
+        total: ['Tổng cộng', fmtN(R.L.length), '100%'] }, $('fbMsg'), $('fbRsnImg').closest('.actions')); } catch (e) { err(e); } });
+    const RS_SHEET = { sb60: 'Tồn đủ SB60N', sb30: 'Tồn đủ SB30N', nosale: '30N không PS số bán' };
+    const DCOLS = [['STT', 'i', 6], ['ASM', 'asm', 28], ['Mã Shop', 'shopCode', 10], ['Tên Shop', 'shop', 36], ['Mã SP', 'code', 11], ['Tên SP', 'name', 42], ['SL đặt', 'qty', 8], ['ĐVT', 'unit', 8], ['SL tồn', 'ton', 9], ['SL tồn dự kiến', 'tonDk', 13], ['SL bán 30N', 'ban30', 11], ['Ngành', 'nganh', 16], ['Phản hồi', 'fb', 46]];
+    /** mỗi lý do (SB60N / SB30N / 30N không bán) 1 sheet chi tiết; tag = 'HT' / 'CL' */
+    function reasonSheets(wb, L, tag) {
+      let n = 0;
+      KEYS.forEach(([k]) => { const rows = L.filter((r) => keyOf(r.fb) === k).sort((a, b) => kvNum(a.asm) - kvNum(b.asm) || (a.asm < b.asm ? -1 : a.asm > b.asm ? 1 : 0) || (a.shopCode < b.shopCode ? -1 : a.shopCode > b.shopCode ? 1 : 0) || (a.nganh < b.nganh ? -1 : a.nganh > b.nganh ? 1 : 0) || (a.code < b.code ? -1 : 1));
+        if (!rows.length) return; n += rows.length; plainSheet(wb, tag + ' - ' + RS_SHEET[k], DCOLS, rows.map((r, i) => Object.assign({ i: i + 1 }, r))); });
+      return n;
+    }
+    $('fbZip').addEventListener('click', async () => {
+      if (!F.file) return; if (typeof ExcelJS === 'undefined' || typeof JSZip === 'undefined') { $('fbMsg').textContent = 'Chưa tải được thư viện xuất Excel / ZIP.'; return; }
+      const btn = $('fbZip'); btn.disabled = true;
+      try {
+        const RN = compute('normal'), RC = compute('cut'), asms = [...new Set([...RN.asmRows, ...RC.asmRows].map((x) => x.asm))].sort((a, b) => kvNum(a) - kvNum(b) || (a < b ? -1 : 1));
+        const zip = new JSZip(); let i = 0, nf = 0;
+        for (const a of asms) {
+          i++; busy('Đang tạo file ASM ' + i + '/' + asms.length + ': ' + a); await new Promise((r) => setTimeout(r, 10));
+          const wb = new ExcelJS.Workbook(); let n = 0;
+          [[RN, 'HT'], [RC, 'CL']].forEach(([R, tag]) => { const sh = R.shopRows.filter((x) => x.asm === a && x.tot > 0); if (!sh.length) return;
+            plainSheet(wb, tag + ' - Tổng hợp theo shop', [['STT', 'i', 6], ['Mã shop', 'code', 10], ['Tên shop', 'shop', 40], ['Tồn shop đủ SB60N', 'sb60', 18], ['Tồn shop đủ SB30N', 'sb30', 18], ['Shop có tồn, 30N không phát sinh số bán', 'nosale', 26], ['Tổng', 'tot', 10]],
+              sh.map((x, j) => Object.assign({ i: j + 1 }, x)).concat([{ i: '', code: '', shop: 'Tổng cộng', sb60: sh.reduce((p, x) => p + x.sb60, 0), sb30: sh.reduce((p, x) => p + x.sb30, 0), nosale: sh.reduce((p, x) => p + x.nosale, 0), tot: sh.reduce((p, x) => p + x.tot, 0) }]));
+            n += reasonSheets(wb, R.L.filter((r) => r.asm === a), tag); });
+          if (!n) continue;
+          nf++; zip.file(('Phan hoi nganh hang - ' + a + (titleTxt() ? ' - ' + titleTxt() : '')).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 110) + '.xlsx', await wb.xlsx.writeBuffer());
+        }
+        busy('Đang nén ZIP…'); const fn = 'Phan_hoi_gui_ASM' + (titleTxt() ? '_' + slug(titleTxt()) : '') + '_' + stamp() + '.zip';
+        await saveFile(fn, await zip.generateAsync({ type: 'blob' })); $('fbMsg').textContent = 'Đã tạo ' + fn + ' · ' + nf + ' file (mỗi ASM 1 file, mỗi lý do 1 sheet).';
+      } catch (e) { err(e); } finally { btn.disabled = false; idle(); }
+    });
+    $('fbXls').addEventListener('click', async () => {
+      if (!F.file) return; if (typeof ExcelJS === 'undefined') { $('fbMsg').textContent = 'Chưa tải được thư viện xuất Excel.'; return; }
+      const btn = $('fbXls'); btn.disabled = true; busy('Đang tạo file báo cáo phản hồi…'); await new Promise((r) => setTimeout(r, 30));
+      try {
+        const wb = new ExcelJS.Workbook();
+        [['normal', 'HT'], ['cut', 'CL']].forEach(([t, tag]) => {
+          const R = compute(t); if (!R.L.length) return;
+          const tot = R.total;
+          plainSheet(wb, 'Theo ASM ' + tag, [['STT', 'i', 6], ['ASM', 'asm', 34], ['Số shop', 'shops', 9], ['Tồn shop đủ SB60N', 'sb60', 18], ['Tồn shop đủ SB30N', 'sb30', 18], ['Shop có tồn, 30N không phát sinh số bán', 'nosale', 26], ['Tổng', 'tot', 10]],
+            R.asmRows.map((x, i) => ({ i: i + 1, asm: x.asm, shops: x.shops, sb60: x.sb60, sb30: x.sb30, nosale: x.nosale, tot: x.tot })).concat([{ i: '', asm: 'Tổng cộng', shops: tot.shops, sb60: tot.sb60, sb30: tot.sb30, nosale: tot.nosale, tot: tot.tot }]));
+          plainSheet(wb, 'Theo shop ' + tag, [['STT', 'i', 6], ['Mã shop', 'code', 10], ['Tên shop', 'shop', 40], ['ASM', 'asm', 30], ['Tồn shop đủ SB60N', 'sb60', 18], ['Tồn shop đủ SB30N', 'sb30', 18], ['Shop có tồn, 30N không phát sinh số bán', 'nosale', 26], ['Tổng', 'tot', 10], ['Tổng mã phản hồi', 'all', 14]],
+            R.shopRows.map((x, i) => Object.assign({ i: i + 1 }, x)));
+          reasonSheets(wb, R.L, tag);
+          const N = R.L.length || 1;
+          plainSheet(wb, 'Lý do ' + tag, [['Phản hồi', 'fb', 70], ['Trường hợp', 'n', 12], ['% Trường hợp', 'p', 14]], R.rsnRows.map((x) => ({ fb: x.fb, n: x.n, p: Math.round(x.n / N * 10000) / 100 })).concat([{ fb: 'Tổng cộng', n: R.L.length, p: 100 }]));
+          plainSheet(wb, 'Chi tiết ' + tag, [['ASM', 'asm', 30], ['Mã Shop', 'shopCode', 10], ['Tên Shop', 'shop', 36], ['Mã SP', 'code', 11], ['Tên SP', 'name', 40], ['Số lượng', 'qty', 9], ['ĐVT', 'unit', 8], ['SL book', 'book', 9], ['SL tồn', 'ton', 9], ['SL tồn dự kiến', 'tonDk', 12], ['SL bán 30N', 'ban30', 10], ['Phản hồi', 'fb', 50], ['Ngành', 'nganh', 16], ['Thuộc tính', 'attr', 16]],
+            R.L.slice().sort((a, b) => kvNum(a.asm) - kvNum(b.asm) || (a.asm < b.asm ? -1 : a.asm > b.asm ? 1 : 0) || (a.shopCode < b.shopCode ? -1 : a.shopCode > b.shopCode ? 1 : 0)));
+        });
+        const fn = 'Phan_hoi_dat_hang' + (titleTxt() ? '_' + slug(titleTxt()) : '') + '_' + stamp() + '.xlsx';
+        await saveFile(fn, new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+        $('fbMsg').textContent = 'Đã tạo ' + fn + '.';
+      } catch (e) { err(e); } finally { btn.disabled = false; idle(); }
+    });
+    window.__fbRefresh = () => { asmLine(); render(); };
     asmLine(); render();
   })();
   /* ---------- báo cáo hình ảnh: số mã hàng thường / cắt liều theo shop ---------- */
@@ -3841,6 +4060,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     if (opts.total) row(opts.total, { bg: '#e7eef8', color: '#132238', bold: true });
     g.fillStyle = '#8a95a5'; g.font = F('400', 12); g.textBaseline = 'alphabetic'; g.fillText('Tạo bởi HÀNG HOÁ MTR', 24, H - 20);
     const blob = await new Promise((res) => cv.toBlob(res, 'image/png'));
+    if (opts.returnBlob) return blob;
     showImagePreview(blob, opts.file, opts.title, msg, opts.onSaved);
   }
   /* danh sách cận date Tính KPI theo từng shop: mỗi shop một sheet */
