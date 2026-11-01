@@ -3747,12 +3747,12 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       '<div class="srcbody" style="align-items:center;text-align:center;border:1.5px dashed var(--accent-line);border-radius:11px;padding:18px 14px"><span class="note">Kéo thả file vào đây, hoặc</span><div class="slotrow" style="justify-content:center"><label class="btn">Chọn file phản hồi<input type="file" id="fbIn" hidden accept=".xlsb,.xlsx,.xls,.xlsm"></label><button class="btn ghost danger" id="fbClear" type="button" hidden>Bỏ file</button></div><div class="st" id="fbSt" style="text-align:left;width:100%"></div></div></div>' +
       '<div id="fbRes" hidden>' +
       '<div class="panel" style="margin-top:12px"><div class="slotrow" style="align-items:center;gap:10px;flex-wrap:wrap"><span class="seg" id="fbSeg"><button type="button" class="segb on" data-t="normal">Hàng thường</button><button type="button" class="segb" data-t="cut">Cắt liều</button></span>' +
-      '<label class="note" style="display:flex;align-items:center;gap:6px">Tên đợt (ghi trên báo cáo) <input id="fbTitle" type="text" style="width:190px" value="' + esc(title0) + '"></label><span style="flex:1"></span><span class="msg" id="fbMsg" role="status"></span><button class="btn ghost" id="fbZip" type="button">Xuất file gửi từng ASM (ZIP)</button><button class="btn" id="fbXls" type="button">Tải file báo cáo (Excel)</button></div></div>' +
+      '<label class="note" style="display:flex;align-items:center;gap:6px">Tên đợt (ghi trên báo cáo) <input id="fbTitle" type="text" style="width:190px" value="' + esc(title0) + '"></label><span style="flex:1"></span><span class="msg" id="fbMsg" role="status"></span><button class="btn ghost" id="fbZip" type="button">Xuất file Excel gửi từng ASM (ZIP)</button><button class="btn" id="fbXls" type="button">Tải file báo cáo (Excel)</button></div></div>' +
       '<div class="warnline" id="fbWarn" hidden></div>' +
       '<div class="stats" id="fbStats"></div>' +
       '<div class="panel rescard"><div class="cardhead"><div><h3 id="fbAsmH">Thống kê theo ASM</h3><span class="note">Số mã hàng ngành hàng không chia vì shop còn tồn / không bán · sắp xếp theo tổng giảm dần</span></div><div class="actions"><button class="btn ghost" id="fbAsmImg" type="button">Xuất ảnh theo ASM</button></div></div>' +
       '<div class="tablewrap" style="max-height:560px"><table><thead><tr><th class="n" style="width:50px">STT</th><th style="min-width:230px">ASM</th><th class="n">Số shop</th><th class="n">Tồn shop đủ SB60N</th><th class="n">Tồn shop đủ SB30N</th><th class="n">Shop có tồn, 30N không phát sinh số bán</th><th class="n">Tổng</th></tr></thead><tbody id="fbAsmBody"></tbody><tfoot id="fbAsmFoot"></tfoot></table></div></div>' +
-      '<div class="panel rescard"><div class="cardhead"><div><h3 id="fbShopH">Thống kê theo shop</h3><span class="note">Chọn ASM để xem / xuất ảnh shop của ASM đó · "Tất cả ASM": xuất ZIP, mỗi ASM 1 ảnh</span></div><div class="actions"><select id="fbAsmSel"></select><button class="btn ghost" id="fbShopImg" type="button">Xuất ảnh theo shop</button></div></div>' +
+      '<div class="panel rescard"><div class="cardhead"><div><h3 id="fbShopH">Thống kê theo shop</h3><span class="note">Chọn ASM để xem / xuất ảnh shop của ASM đó · "Tất cả ASM": xuất ZIP, mỗi ASM 1 ảnh</span></div><div class="actions"><select id="fbAsmSel"></select><button class="btn ghost" id="fbShopImg" type="button">Xuất ảnh theo shop</button><button class="btn" id="fbZip2" type="button">Xuất file Excel gửi từng ASM (ZIP)</button></div></div>' +
       '<div class="tablewrap" style="max-height:560px"><table><thead><tr><th class="n" style="width:50px">STT</th><th>Mã shop</th><th style="min-width:220px">Tên shop</th><th>ASM</th><th class="n">SB60N</th><th class="n">SB30N</th><th class="n">30N không bán</th><th class="n">Tổng</th><th class="n">Tổng mã phản hồi</th></tr></thead><tbody id="fbShopBody"></tbody><tfoot id="fbShopFoot"></tfoot></table></div></div>' +
       '<details class="optdet"><summary><span class="chev"></span><b>Tổng hợp theo lý do phản hồi</b> <span class="note" id="fbRsnSum"></span></summary><div class="optbody"><div class="tablewrap"><table><thead><tr><th>Phản hồi</th><th class="n">Trường hợp</th><th class="n">% trường hợp</th></tr></thead><tbody id="fbRsnBody"></tbody><tfoot id="fbRsnFoot"></tfoot></table></div><div class="actions" style="margin-top:8px"><button class="btn ghost" id="fbRsnImg" type="button">Xuất ảnh lý do</button></div></div></details>' +
       '</div>';
@@ -3897,12 +3897,22 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
               sh.map((x, j) => Object.assign({ i: j + 1 }, x)).concat([{ i: '', code: '', shop: 'Tổng cộng', sb60: sh.reduce((p, x) => p + x.sb60, 0), sb30: sh.reduce((p, x) => p + x.sb30, 0), nosale: sh.reduce((p, x) => p + x.nosale, 0), tot: sh.reduce((p, x) => p + x.tot, 0) }]));
             n += reasonSheets(wb, R.L.filter((r) => r.asm === a), tag); });
           if (!n) continue;
+          // mỗi shop 1 sheet: chi tiết từng sản phẩm (hàng thường + cắt liều) thuộc 3 lý do
+          const lines = [...RN.L.filter((r) => r.asm === a && keyOf(r.fb)).map((r) => Object.assign({ t: 'Hàng thường' }, r)), ...RC.L.filter((r) => r.asm === a && keyOf(r.fb)).map((r) => Object.assign({ t: 'Cắt liều' }, r))];
+          const byShop = new Map(); lines.forEach((r) => { const k = r.shopCode || r.shop; if (!byShop.has(k)) byShop.set(k, []); byShop.get(k).push(r); });
+          const used = new Set(), ord = { sb60: 0, sb30: 1, nosale: 2 };
+          [...byShop.entries()].sort((x, y) => (x[0] < y[0] ? -1 : 1)).forEach(([k, L]) => {
+            let nm = (L[0].shopCode + ' ' + L[0].shop).replace(/[\\/:*?\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31), b = nm, j = 2; while (used.has(nm.toLowerCase())) { nm = b.slice(0, 28) + ' ' + j++; } used.add(nm.toLowerCase());
+            L.sort((x, y) => (x.t === y.t ? 0 : x.t === 'Hàng thường' ? -1 : 1) || ord[keyOf(x.fb)] - ord[keyOf(y.fb)] || (x.nganh < y.nganh ? -1 : x.nganh > y.nganh ? 1 : 0) || (x.code < y.code ? -1 : 1));
+            plainSheet(wb, nm, [['STT', 'i', 6], ['Loại hàng', 't', 12], ['Mã SP', 'code', 11], ['Tên SP', 'name', 44], ['SL đặt', 'qty', 8], ['ĐVT', 'unit', 8], ['SL tồn', 'ton', 9], ['SL tồn dự kiến', 'tonDk', 13], ['SL bán 30N', 'ban30', 11], ['Ngành', 'nganh', 16], ['Phản hồi', 'fb', 46]], L.map((r, x) => Object.assign({ i: x + 1 }, r)));
+          });
           nf++; zip.file(('Phan hoi nganh hang - ' + a + (titleTxt() ? ' - ' + titleTxt() : '')).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 110) + '.xlsx', await wb.xlsx.writeBuffer());
         }
         busy('Đang nén ZIP…'); const fn = 'Phan_hoi_gui_ASM' + (titleTxt() ? '_' + slug(titleTxt()) : '') + '_' + stamp() + '.zip';
-        await saveFile(fn, await zip.generateAsync({ type: 'blob' })); $('fbMsg').textContent = 'Đã tạo ' + fn + ' · ' + nf + ' file (mỗi ASM 1 file, mỗi lý do 1 sheet).';
+        await saveFile(fn, await zip.generateAsync({ type: 'blob' })); $('fbMsg').textContent = 'Đã tạo ' + fn + ' · ' + nf + ' file (mỗi ASM 1 file: tổng hợp theo shop, mỗi lý do 1 sheet, mỗi shop 1 sheet chi tiết sản phẩm).';
       } catch (e) { err(e); } finally { btn.disabled = false; idle(); }
     });
+    $('fbZip2').addEventListener('click', () => $('fbZip').click());
     $('fbXls').addEventListener('click', async () => {
       if (!F.file) return; if (typeof ExcelJS === 'undefined') { $('fbMsg').textContent = 'Chưa tải được thư viện xuất Excel.'; return; }
       const btn = $('fbXls'); btn.disabled = true; busy('Đang tạo file báo cáo phản hồi…'); await new Promise((r) => setTimeout(r, 30));
