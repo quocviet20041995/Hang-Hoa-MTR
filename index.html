@@ -3780,9 +3780,13 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       return out.normal.length || out.cut.length ? out : null;
     }
     function compute(type) {
-      const L = F.rows[type] || [], cache = new Map(), A = TA.get && TA.get();
-      L.forEach((r) => { const k = r.shopCode + '\u0000' + r.shop; if (!cache.has(k)) cache.set(k, asmOf(r.shopCode, r.shop) || NOASM); r.asm = cache.get(k); });
+      const L0 = F.rows[type] || [], cache = new Map(), A = TA.get && TA.get(), outside = new Map();
+      // có file chia shop: shop không có trong file chia shop = ngoài Miền Trung -> không tính; shop có nhưng chưa có ASM (pending) -> "Chưa có ASM"
+      const L = L0.filter((r) => { const k = r.shopCode + '\u0000' + r.shop; if (!cache.has(k)) cache.set(k, asmOf(r.shopCode, r.shop)); const a = cache.get(k);
+        if (A && !a) { const o = outside.get(r.shopCode || r.shop) || { code: r.shopCode, shop: r.shop, n: 0 }; o.n++; outside.set(r.shopCode || r.shop, o); return false; }
+        r.asm = a && kvNum(a) !== 1e9 ? a : NOASM; return true; });
       const byA = new Map(), byS = new Map(), rsn = new Map();
+      if (A && A.shopsOf) A.shopsOf.forEach((_, a) => { if (kvNum(a) !== 1e9 && !byA.has(a)) byA.set(a, { asm: a, sh: new Set(), sb60: 0, sb30: 0, nosale: 0 }); }); // ASM Miền Trung không có mã nào vẫn hiện 0
       L.forEach((r) => {
         const k = keyOf(r.fb);
         if (!byA.has(r.asm)) byA.set(r.asm, { asm: r.asm, sh: new Set(), sb60: 0, sb30: 0, nosale: 0 }); const a = byA.get(r.asm); a.sh.add(r.shopCode || r.shop); if (k) a[k]++;
@@ -3794,7 +3798,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const shopRows = [...byS.values()].map((x) => Object.assign(x, { tot: tot(x) })).sort((x, y) => (x.asm === NOASM) - (y.asm === NOASM) || kvNum(x.asm) - kvNum(y.asm) || (x.asm < y.asm ? -1 : x.asm > y.asm ? 1 : 0) || y.tot - x.tot);
       const rsnRows = [...rsn.values()].sort((x, y) => y.n - x.n);
       const sum = (k) => asmRows.reduce((p, x) => p + x[k], 0);
-      return { L, asmRows, shopRows, rsnRows, total: { shops: sum('shops'), sb60: sum('sb60'), sb30: sum('sb30'), nosale: sum('nosale'), tot: sum('tot') }, noAsm: asmRows.find((x) => x.asm === NOASM), hasAsm: !!A };
+      return { L, outside, asmRows, shopRows, rsnRows, total: { shops: sum('shops'), sb60: sum('sb60'), sb30: sum('sb30'), nosale: sum('nosale'), tot: sum('tot') }, noAsm: asmRows.find((x) => x.asm === NOASM), hasAsm: !!A };
     }
     const tName = () => (F.type === 'cut' ? 'Cắt liều' : 'Hàng Thường');
     const titleTxt = () => String($('fbTitle').value || '').trim();
@@ -3806,7 +3810,9 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       document.querySelectorAll('#fbSeg button').forEach((b) => b.classList.toggle('on', b.dataset.t === F.type));
       const R = compute(F.type); F.R = R;
       $('fbStats').innerHTML = stat(fmtN(R.L.length), 'mã phản hồi (' + tName().toLowerCase() + ')') + stat(fmtN(R.total.shops), 'shop') + stat(fmtN(R.total.tot), 'mã shop còn tồn / không bán', 'w') + stat(fmtN(R.asmRows.filter((x) => x.asm !== NOASM).length), 'ASM');
-      const w = []; if (!R.hasAsm) w.push('<b>Chưa nạp file chia shop</b> – chưa chia được theo ASM.'); else if (R.noAsm) w.push('<b>' + R.noAsm.shops + ' shop chưa có ASM</b> trong file chia shop: ' + R.shopRows.filter((x) => x.asm === NOASM).slice(0, 12).map((x) => esc(x.code + ' ' + x.shop)).join(', ') + (R.noAsm.shops > 12 ? '…' : '') + '.');
+      const w = []; if (!R.hasAsm) w.push('<b>Chưa nạp file chia shop</b> – chưa chia được theo ASM và chưa lọc được shop ngoài Miền Trung.');
+      if (R.outside.size) { const o = [...R.outside.values()]; w.push('<b>' + o.length + ' shop ngoài Miền Trung</b> (không có trong file chia shop) – ' + fmtN(o.reduce((p, x) => p + x.n, 0)) + ' dòng <b>không tính</b> vào báo cáo: ' + o.slice(0, 10).map((x) => esc(x.code + ' ' + x.shop)).join(', ') + (o.length > 10 ? '…' : '') + '.'); }
+      if (R.hasAsm && R.noAsm && R.noAsm.shops) w.push('<b>' + R.noAsm.shops + ' shop Miền Trung chưa có ASM</b> trong file chia shop (pending): ' + R.shopRows.filter((x) => x.asm === NOASM).slice(0, 10).map((x) => esc(x.code + ' ' + x.shop)).join(', ') + '.');
       $('fbWarn').hidden = !w.length; $('fbWarn').innerHTML = w.join('<br>');
       const tt = titleTxt();
       $('fbAsmH').textContent = 'Thống kê số lượng mã hàng theo ASM – ' + tName() + (tt ? ' · ' + tt : '');
@@ -3864,7 +3870,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
         if (F.asmSel) { await tableImage(shopImgOpts(R, F.asmSel), $('fbMsg'), $('fbShopImg').closest('.actions')); return; }
         if (typeof JSZip === 'undefined') { $('fbMsg').textContent = 'Chưa tải được thư viện nén ZIP.'; return; }
         const zip = new JSZip(), asms = R.asmRows.map((x) => x.asm); let i = 0;
-        for (const a of asms) { i++; busy('Đang tạo ảnh ' + i + '/' + asms.length + ': ' + a); await new Promise((r) => setTimeout(r, 10)); const o = shopImgOpts(R, a); o.returnBlob = true; zip.file(o.file, await tableImage(o)); }
+        for (const a of asms) { i++; busy('Đang tạo ảnh ' + i + '/' + asms.length + ': ' + a); await new Promise((r) => setTimeout(r, 10)); if (!R.shopRows.some((x) => x.asm === a)) continue; const o = shopImgOpts(R, a); o.returnBlob = true; zip.file(o.file, await tableImage(o)); }
         busy('Đang nén ZIP…'); const fn = 'Phan_hoi_theo_shop_' + slug(tName()) + '_' + stamp() + '.zip';
         await saveFile(fn, await zip.generateAsync({ type: 'blob' })); $('fbMsg').textContent = 'Đã tạo ' + fn + ' · ' + asms.length + ' ảnh (mỗi ASM 1 ảnh).';
       } catch (e) { err(e); } finally { idle(); }
