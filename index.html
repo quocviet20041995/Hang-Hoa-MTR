@@ -1,4 +1,5 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0"><title>HÀNG HOÁ MTR</title>
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+<title>HÀNG HOÁ MTR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -4757,6 +4758,26 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
       const sw = document.createElement('div'); sw.id = 'staleWarn'; sw.className = 'warnline stalew'; sw.hidden = true; $('work').prepend(sw);
       const renderStale = () => { const L = window.__mtrStale(), on = curTab !== 'report'; sw.hidden = !L.length || !on; sw.innerHTML = L.length ? '<b>⚠ Dữ liệu có thể đã cũ.</b> ' + L.join(' ') : ''; };
 
+      /* --- Popup nhắc nạp lại file tồn kho xoay vòng khi file cũ (mục File đặt hàng); bấm "Bỏ qua" vẫn dùng file cũ --- */
+      const stk = document.createElement('dialog'); stk.id = 'stockStaleDlg'; stk.className = 'imgdlg guidedlg';
+      stk.innerHTML = '<div class="imgdlg-head"><div><h3>File tồn kho xoay vòng đã cũ</h3><span class="note">Nên nạp file mới để loại mã 30N / 60N chính xác</span></div><button type="button" class="btn ghost sm" id="stkX" aria-label="Đóng">✕</button></div>' +
+        '<div class="imgdlg-body guidebody"><p id="stkTxt" style="margin:0 0 10px"></p><p class="note" style="margin:0">Tồn kho cũ có thể làm tool loại thiếu hoặc thừa các mã còn tồn đủ bán 30 ngày / 60 ngày. Bạn có thể bỏ qua nếu chưa có file mới, tool vẫn chạy bằng file đã lưu.</p></div>' +
+        '<div class="imgdlg-foot"><button type="button" class="btn ghost" id="stkSkip">Bỏ qua, dùng file cũ</button><button type="button" class="btn" id="stkNew">Nạp file tồn kho mới</button></div>';
+      document.body.appendChild(stk);
+      let stkShown = null;
+      const stkClose = () => { try { stk.close(); } catch (e) { stk.removeAttribute('open'); } };
+      stk.querySelector('#stkX').addEventListener('click', stkClose); stk.querySelector('#stkSkip').addEventListener('click', stkClose);
+      stk.addEventListener('click', (e) => { if (e.target === stk) stkClose(); });
+      stk.querySelector('#stkNew').addEventListener('click', () => { stkClose(); const f = $('file'); if (f) f.click(); });
+      const maybeStockPopup = () => {
+        const s = stockInfo(); if (!s || s.days < 1 || curTab !== 'order' || stk.open || stkShown === s.at) return;
+        stkShown = s.at;
+        $('stkTxt').innerHTML = 'File tồn kho xoay vòng đang dùng (<b>' + esc(s.name || 'đã lưu') + '</b>) cập nhật lúc <b>' + fmtTime(s.at) + '</b> (' + ago(s.days) + '). Bạn nên nạp file tồn kho xoay vòng mới trước khi xuất file đặt hàng.';
+        try { stk.showModal(); } catch (e) { stk.setAttribute('open', ''); }
+      };
+      document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => setTimeout(maybeStockPopup, 0)));
+      const _sc = window.__mtrStaleCards; window.__mtrStaleCards = () => { _sc(); if (stk.open && !(stockInfo() && stockInfo().days >= 1)) stkClose(); setTimeout(maybeStockPopup, 0); };
+
       /* --- Lần xuất gần nhất (theo mục) --- */
       const LK = 'mtr_last_export';
       const lastAll = () => { try { return JSON.parse(localStorage.getItem(LK) || '{}') || {}; } catch (e) { return {}; } };
@@ -5544,4 +5565,6 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
   window.__tool = { state, loadFile, exportData, refreshReport };
 })();
 </script>
+
+
 </body></html>
