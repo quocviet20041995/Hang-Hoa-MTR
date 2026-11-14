@@ -1629,6 +1629,8 @@ function sumRows(rows) {
  * File đặt hàng gộp: hàng thiếu từ tồn kho xoay vòng + file đặt hàng của shop, bỏ mã có ngày đảm bảo > maxDays.
  * ctx: { stockRows (thô), res (compute), orders (đã gắn shopR), P:{subtract, maxDays} }
  */
+/** so sánh shop theo mã shop dạng số tăng dần (899 < 80275 < 80829); shop không có mã số xếp cuối, cùng mã thì theo tên */
+const cmpShopNo = (x, y) => { const n = (s) => { const m = String(s || '').match(/^\s*(?:LC\s*)?(\d+)/i); return m ? +m[1] : Infinity; }; const d = n(x) - n(y); return d > 0 || d < 0 ? Math.sign(d) : (x < y ? -1 : x > y ? 1 : 0); };
 function buildOrderFile(ctx) {
   const P = Object.assign({ subtract: true, maxDays: 30, maxDays2: 60 }, ctx.P || {});
   const stock = new Map();
@@ -1709,8 +1711,8 @@ function buildOrderFile(ctx) {
   // Mã hàng thiếu đã bị loại ngay khi tính (có trong file cận date) mà shop không đặt -> cũng tính là không bổ sung
   for (const nn of (ctx.res.nearNeeds || [])) { const e = ent.get(nn.r.shop + '\u0000' + keyOf(nn.r.prod)); if (!e || !e.qtyOrder) nearDrop++; }
   const lv = (x) => (x === '—' ? 2 : LVL[x]);
-  items.sort((a, b) => (a.shop < b.shop ? -1 : a.shop > b.shop ? 1 : 0) || lv(a.level) - lv(b.level) || (a.days === '' ? 1e9 : a.days) - (b.days === '' ? 1e9 : b.days));
-  removed.sort((a, b) => (a.shop < b.shop ? -1 : a.shop > b.shop ? 1 : 0));
+  items.sort((a, b) => cmpShopNo(a.shop, b.shop) || lv(a.level) - lv(b.level) || (a.days === '' ? 1e9 : a.days) - (b.days === '' ? 1e9 : b.days));
+  removed.sort((a, b) => cmpShopNo(a.shop, b.shop));
   const by = new Map();
   for (const it of items) { const b = by.get(it.shop) || { shop: it.shop, lines: 0, qty: 0, urgent: 0, removed: 0 }; b.lines++; b.qty += it.qty; if (it.level === 'XIN GẤP') b.urgent++; by.set(it.shop, b); }
   for (const r of removed) { const b = by.get(r.shop) || { shop: r.shop, lines: 0, qty: 0, urgent: 0, removed: 0 }; b.removed++; by.set(r.shop, b); }
@@ -1727,10 +1729,10 @@ function buildOrderFile(ctx) {
     const rows = stock.get(e.shop + '\u0000' + keyOf(e.prod)) || [];
     const note = [];
     return { shop: e.shop, shopCode: shopCodeOf(e.shop), code: codeOf(e.prod), prod: rows.length ? rows[0].prod : e.prod, unit: e.unit || (rows[0] && rows[0].unit) || '', qty: e.qty, note: [...new Set(e.notes)].join('; '), lines: e.lines };
-  }).sort((a, b) => (a.shop < b.shop ? -1 : a.shop > b.shop ? 1 : 0) || (a.prod < b.prod ? -1 : 1));
-  slow.sort((a, b) => (a.shop < b.shop ? -1 : a.shop > b.shop ? 1 : 0) || ((b.days === '' ? 1e9 : b.days) - (a.days === '' ? 1e9 : a.days)));
-  nearRm.sort((a, b) => (a.shop < b.shop ? -1 : a.shop > b.shop ? 1 : 0) || (a.prod < b.prod ? -1 : 1));
-  return { items, cut, removed, slow, near: nearRm, byShop: [...by.values()].sort((a, b) => (a.shop < b.shop ? -1 : 1)),
+  }).sort((a, b) => cmpShopNo(a.shop, b.shop) || (a.prod < b.prod ? -1 : 1));
+  slow.sort((a, b) => cmpShopNo(a.shop, b.shop) || ((b.days === '' ? 1e9 : b.days) - (a.days === '' ? 1e9 : a.days)));
+  nearRm.sort((a, b) => cmpShopNo(a.shop, b.shop) || (a.prod < b.prod ? -1 : 1));
+  return { items, cut, removed, slow, near: nearRm, byShop: [...by.values()].sort((a, b) => cmpShopNo(a.shop, b.shop)),
     stats: { kept: items.filter((x) => x.kept).length, near: nearRm.length, nearDrop, slow: slow.length, cutLines: cutRows.length, cutMerged: cut.length, cutQty: cut.reduce((a, x) => a + x.qty, 0), needLines, orderLines, merged: items.length, removed: removed.length, notFound, badQty, totalQty: items.reduce((a, x) => a + x.qty, 0) } };
 }
 
