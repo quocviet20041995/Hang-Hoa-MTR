@@ -1292,13 +1292,12 @@ function parseExpiryKpi(aoa) {
     hsd: I('hạn sử dụng'), price: I('giá bán l1'), unit: I('đvt'), target: I('chỉ tiêu'), done: I('thực hiện'), left: I('còn lại') };
   const S = (r, k) => (ix[k] >= 0 && r[ix[k]] != null ? String(r[ix[k]]).trim() : '');
   const N = (r, k) => { const v = numV(S(r, k)); return isFinite(v) ? v : 0; };
-  const rows = [];
-  let month = '';
+  const rows = [], monN = new Map();
   for (let i = h + 1; i < aoa.length; i++) {
     const r = aoa[i] || [];
     const shop = S(r, 'shop'), code = fixCode(S(r, 'code')), name = S(r, 'name');
     if (!shop || (!code && !name)) continue;
-    if (!month) month = S(r, 'month');
+    { const mk = ix.month >= 0 ? monKey(r[ix.month]) : ''; if (mk) monN.set(mk, (monN.get(mk) || 0) + 1); }
     const target = N(r, 'target'), done = N(r, 'done');
     let left = ix.left >= 0 && S(r, 'left') !== '' ? N(r, 'left') : Math.max(target - done, 0);
     rows.push({ shop, shopName: S(r, 'shopName'), prod: (code ? code + ' - ' : '') + name, code, lot: S(r, 'lot'), hsd: S(r, 'hsd'), qty: left, target, done,
@@ -1308,9 +1307,27 @@ function parseExpiryKpi(aoa) {
   const dm = rows.map((r) => String(r.hsd).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/)).filter(Boolean);
   const us = dm.some((m) => +m[2] > 12) && !dm.some((m) => +m[1] > 12);
   if (us) rows.forEach((r) => { const m = String(r.hsd).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/); if (m) { const y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; r.hsd = y + '-' + String(m[1]).padStart(2, '0') + '-' + String(m[2]).padStart(2, '0'); } });
-  return { rows, month, kpiFile: true };
+  return { rows, month: pickMonth(monN), months: [...monN.entries()], kpiFile: true };
 }
 
+/** Đưa nhãn tháng trong file ("2026-10", "2026-10-05", "10/2026", "2026/10", ngày Excel…) về dạng YYYY-MM; không nhận ra thì trả ''. */
+function monKey(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) return v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0');
+  if (typeof v === 'number') { if (v > 20000) { const d = new Date(Math.round((v - 25569) * 86400000)); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); } return ''; }
+  const t = String(v).trim(); let m = t.match(/(20\d{2})\s*[-\/.]\s*(\d{1,2})(?!\d)/);
+  if (m && +m[2] >= 1 && +m[2] <= 12) return m[1] + '-' + String(m[2]).padStart(2, '0');
+  m = t.match(/(?:^|[^\d])(\d{1,2})\s*[-\/.]\s*(20\d{2})(?!\d)/);
+  if (m && +m[1] >= 1 && +m[1] <= 12) return m[2] + '-' + String(m[1]).padStart(2, '0');
+  return '';
+}
+/** Chọn tháng của file khi các dòng có thể ghi nhiều tháng: có dòng thuộc tháng hiện tại thì lấy tháng hiện tại, không thì tháng nhiều dòng nhất. */
+function pickMonth(counts) {
+  const d = new Date(), cur = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  if (counts.get(cur)) return cur;
+  let best = '', bn = 0; counts.forEach((n, k) => { if (n > bn || (n === bn && k > best)) { best = k; bn = n; } });
+  return best;
+}
 /** File Báo cáo KPI cận date TỔNG THEO SHOP (Mã shop, Tên shop, Chỉ tiêu, Thực hiện, Tỷ lệ hoàn thành – không có Mã sản phẩm).
  *  Số liệu hệ thống tính trên số lượng chưa làm tròn nên khớp chính xác; dùng để ghi đè % HT KPI theo shop. */
 function parseKpiShopSum(aoas) {
@@ -1319,16 +1336,16 @@ function parseKpiShopSum(aoas) {
       const head = (a[h] || []).map(norm);
       if (!head.includes('mã shop') || !head.includes('chỉ tiêu') || !head.includes('thực hiện') || head.includes('mã sản phẩm')) continue;
       const I = (n) => head.indexOf(n), iM = I('tháng/năm'), iK = I('kpi'), iS = I('mã shop'), iN = I('tên shop'), iC = I('chỉ tiêu'), iT = I('thực hiện'), iP = head.findIndex((c) => /^tỷ lệ|^tỉ lệ|% ?ht/.test(c));
-      const map = new Map(); let month = '';
+      const maps = new Map();
       for (let i = h + 1; i < a.length; i++) {
         const r = a[i] || [], code = String(r[iS] == null ? '' : r[iS]).replace(/\.0+$/, '').trim(); if (!/^\d{3,}$/.test(code)) continue;
         if (iK >= 0 && r[iK] != null && String(r[iK]).trim() && !/^tính\s*kpi$/i.test(String(r[iK]).trim()) && norm(r[iK]) !== 'kpi') continue; // chỉ dòng Tính KPI
-        if (!month && iM >= 0 && r[iM]) month = String(r[iM]).trim();
+        const mk = iM >= 0 ? monKey(r[iM]) : ''; let map = maps.get(mk); if (!map) { map = new Map(); maps.set(mk, map); }
         const ct = numV(r[iC]), th = numV(r[iT]), pct = iP >= 0 ? numV(r[iP]) : NaN;
         const o = map.get(code) || { code, name: iN >= 0 ? String(r[iN] || '').trim() : '', ct: 0, th: 0, pct: NaN, n: 0 };
         o.ct += isFinite(ct) ? ct : 0; o.th += isFinite(th) ? th : 0; o.n++; o.pct = o.n === 1 && isFinite(pct) ? pct : NaN; map.set(code, o);
       }
-      if (map.size) return { map, month };
+      if (maps.size) { const cnt = new Map(); maps.forEach((m, k) => { if (k) cnt.set(k, m.size); }); const month = cnt.size ? pickMonth(cnt) : ''; return { map: maps.get(month) || [...maps.values()][0], month, months: [...cnt.entries()] }; }
     }
   }
   return null;
@@ -3095,7 +3112,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
             const fm = /^(\d{4})-(\d{1,2})/.exec(sm.month || ''), mon = fm ? fm[1] + '-' + fm[2].padStart(2, '0') : d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') : cur;
             if (mon !== cur) { // file của tháng trước: tự xoá để người dùng nạp lại khi cần
               if (restore) { state.kpiShopSum = null; state.svFiles.kpisum = []; saveSv('kpisum'); } // nạp nhầm file tháng khác thì giữ file đang dùng
-              state.kpiSumErr = restore ? 'File % HT KPI theo shop tháng ' + mon.split('-').reverse().join('/') + ' đã tự xoá vì đã sang tháng mới. Nạp file tháng này nếu cần.' : f.name + ' là tháng ' + mon.split('-').reverse().join('/') + ', không phải tháng này – không dùng.';
+              state.kpiSumErr = restore ? 'File % HT KPI theo shop tháng ' + mon.split('-').reverse().join('/') + ' đã tự xoá vì đã sang tháng mới. Nạp file tháng này nếu cần.' : f.name + ' chỉ có dữ liệu tháng ' + mon.split('-').reverse().join('/') + (sm.months && sm.months.length > 1 ? ' (các tháng trong file: ' + sm.months.map((x) => x[0].split('-').reverse().join('/')).join(', ') + ')' : '') + ', không có tháng ' + cur.split('-').reverse().join('/') + ' – không dùng. Hãy xuất lại báo cáo với bộ lọc đúng tháng hiện tại.';
             } else {
               state.kpiShopSum = Object.assign({ name: f.name, date: d, at: restore && state.svFiles.kpisum && state.svFiles.kpisum[0] ? state.svFiles.kpisum[0].at : Date.now() }, sm);
               if (!restore) rememberFiles('kpisum', files);
@@ -3402,7 +3419,7 @@ const REPORT_PROMPT = "# VAI TRÒ & NGUYÊN TẮC BẮT BUỘC\nBạn là \"Phar
     const off = mon && S.month && mon !== S.month, dd = state.parsed.expiry && state.parsed.expiry.date, old = S.date && dd && dayKey(dd) > dayKey(S.date);
     const when = (S.date ? ' · dữ liệu ngày ' + fmtD(S.date) : '') + (S.at ? ' · nạp lúc ' + new Date(S.at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '');
     if (!off && old) { st.className = 'note'; st.innerHTML = E + '<span style="color:var(--warn)">⚠ Đang lưu file % HT cũ: ' + esc(S.name) + when + ' – cũ hơn file cận date (ngày ' + fmtD(dd) + '). <b>Chỉ tiêu</b> lấy theo file % HT (đúng hệ thống), <b>thực hiện</b> lấy theo file cận date mới (tính an toàn). Nạp file % HT mới để đúng 100%.</span>'; return; }
-    st.className = 'note'; st.innerHTML = E + (off ? '<span style="color:var(--urgent)">⚠ ' + esc(S.name) + ' là tháng ' + esc(S.month) + ', khác tháng file cận date (' + esc(mon) + ') – không dùng.</span>' : '<span style="color:var(--ok)">✓ Đang dùng ' + esc(S.name) + ' (' + S.map.size + ' shop)' + esc(when) + ': chỉ tiêu, thực hiện, % HT KPI lấy đúng theo hệ thống. Đã lưu – lần sau mở tool tự nạp lại, sang tháng mới tự xoá.</span>');
+    st.className = 'note'; st.innerHTML = E + (off ? '<span style="color:var(--urgent)">⚠ ' + esc(S.name) + ' là tháng ' + esc(S.month.split('-').reverse().join('/')) + ', còn file cận date chi tiết đang nạp là tháng ' + esc(String(mon).split('-').reverse().join('/')) + ' – không dùng. Hãy nạp lại file cận date chi tiết của đúng tháng ' + esc(S.month.split('-').reverse().join('/')) + ' ở bước trên.</span>' : '<span style="color:var(--ok)">✓ Đang dùng ' + esc(S.name) + ' (' + S.map.size + ' shop)' + esc(when) + ': chỉ tiêu, thực hiện, % HT KPI lấy đúng theo hệ thống. Đã lưu – lần sau mở tool tự nạp lại, sang tháng mới tự xoá.</span>');
   }
   function kpiSummary() {
     const e = state.exp, sv = state.surveys.expiry;
